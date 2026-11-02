@@ -86,7 +86,7 @@ def _observed_offers(root: Tag) -> list[tuple[str,str]]:
         # Preserve sentence-like promotions even without a special DOM class.
         for text in root.stripped_strings:
             term = " ".join(text.split())
-            if (DIGITAL.search(term) or VOLUME.search(term)) and len(term) <= 400:
+            if DIGITAL.search(term) or VOLUME.search(term):
                 if (term, "") not in offers:
                     offers.append((term,""))
     return offers
@@ -169,6 +169,24 @@ def extract_cards(html: str, category: str, sub_category: str) -> list[dict]:
             seen.add(candidate["url"]); out.append(candidate)
     return out
 
+def approximate_excluded_urls(html: str) -> set[str]:
+    """Evidence: which observed /p/ cards were excluded for source approx weight.
+
+    A missing name, price or unknown card shape is NOT a justified exclusion.
+    The caller must reconcile other observed links to actual parsed cards.
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    result = set()
+    for a in soup.select('main a[href*="/p/"]'):
+        url = _original_href(str(a.get("href") or "")).split("?", 1)[0]
+        if not _source_url_valid(url):
+            continue
+        node = _product_node_for_anchor(a)
+        if APPROX_WEIGHT.search(_observable_weight(node)):
+            result.add(url)
+    return result
+
+
 def _find_ld_products(value: object) -> list[dict]:
     if isinstance(value,list):
         return [p for item in value for p in _find_ld_products(item)]
@@ -185,6 +203,8 @@ def _find_ld_products(value: object) -> list[dict]:
 
 def enrich_from_details(item: dict, html: str) -> dict:
     root=BeautifulSoup(html,"html.parser")
+    if not item.get("product_title"):
+        item["product_title"]=_first_text(root, ('main h1', 'h1', '[data-testid*="product-name"]', '[data-testid*="product-title"]'))
     for script in root.select('script[type="application/ld+json"]'):
         try:
             products=_find_ld_products(json.loads(script.string or script.get_text()))
@@ -201,7 +221,7 @@ def enrich_from_details(item: dict, html: str) -> dict:
     if not item.get("ppm"):
         item["ppm"]=_ppm(root)
     if not item.get("regular_price"):
-        item["regular_price"]=_explicit_price(root,REGULAR_PRICE_SELECTORS)
+        item["regular_price"]=_explicit_price(root,REGULAR_PRICE_SELECTORS) or _explicit_price(root,CURRENT_PRICE_SELECTORS)
     if not item.get("sale_price"):
         item["sale_price"]=_explicit_price(root,SALE_PRICE_SELECTORS)
     if not item.get("image_url"):

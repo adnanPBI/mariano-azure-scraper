@@ -5,6 +5,7 @@ credentials embedded in the code. Incomplete listings are rejected.
 """
 from __future__ import annotations
 import logging
+import os
 from hashlib import sha256
 import math
 from bs4 import BeautifulSoup
@@ -12,14 +13,17 @@ import random
 import re
 import time
 from dataclasses import dataclass
-from urllib.parse import urlparse,urljoin
+from urllib.parse import urlparse,urljoin,parse_qs
 from playwright.sync_api import Page, sync_playwright, Error as PlaywrightError
 from .config import Category,Store,Options
-from .extract import extract_cards, enrich_from_details, finalize_card
+from .extract import extract_cards, enrich_from_details, finalize_card, approximate_excluded_urls
+from .coverage import Completion, EXPLICIT_END, verify_completion, IncompleteListing
+from .coupons import scan_coupon_cards
 
 LOG=logging.getLogger(__name__)
 BLOCKING=re.compile(r"(?:verify\s+(?:that\s+)?you\s+are\s+human|captcha|access\s+denied|automated\s+requests|unusual\s+traffic|temporarily\s+blocked|bot\s+challenge|request\s+blocked)", re.I)
 PRODUCT_COUNT=re.compile(r"\b([\d,]+)\s+(?:products|results|items)\b",re.I)
+COUPON_COUNT=re.compile(r"\b([\d,]+)\s+(?:coupons|offers)\b",re.I)
 
 class CrawlFailure(RuntimeError):
     pass
@@ -36,8 +40,10 @@ class CrawlOutcome:
     proof: str
     observed_count: int | None
     screenshots: list[str]
+    coverage: dict | None = None
 
 class BrowserSource:
+    requires_positive_coverage = True
     def __init__(self,store:Store, options:Options):
         self.store=store
         self.options=options
@@ -53,7 +59,16 @@ class BrowserSource:
     def __enter__(self):
         self._playwright=sync_playwright().start()
         self.browser=self._playwright.chromium.launch(headless=self.options.browser_headless, args=["--disable-dev-shm-usage"])
-        self.context=self.browser.new_context(locale="en-US", timezone_id="America/Chicago", viewport={"width":1480,"height":920})
+        context_args={"locale":"en-US","timezone_id":"America/Chicago",
+                      "viewport":{"width":1480,"height":920}}
+        video_dir=os.getenv("MARIANOS_ACCEPTANCE_VIDEO_DIR","").strip()
+        if video_dir:
+            # Explicit opt-in only. Browser footage can contain private store
+            # and login data; keep output outside the public repository.
+            os.makedirs(video_dir,exist_ok=True)
+            context_args["record_video_dir"]=video_dir
+            context_args["record_video_size"]={"width":1280,"height":800}
+        self.context=self.browser.new_context(**context_args)
         self.page=self.context.new_page()
         self.page.set_default_timeout(self.options.timeout_ms)
         self._navigate("https://www.marianos.com/")
@@ -62,6 +77,9 @@ class BrowserSource:
         return self
 
     def __exit__(self,*exc):
+        # Explicitly close the context before the browser: Playwright writes
+        # requested recording evidence only when the context is closed.
+        if self.context:self.context.close()
         if self.browser:self.browser.close()
         if self._playwright:self._playwright.stop()
 
@@ -122,7 +140,9 @@ class BrowserSource:
             matching=[]
             for i in range(min(options.count(),50)):
                 opt=options.nth(i)
-                nearby=opt.locator("xpath=../..").inner_text(timeout=3000).casefold()
+                # Do not match the global header picker against body-wide text.
+                # Constrain the address to the nearest visible result card.
+                nearby=opt.locator("xpath=..").inner_text(timeout=3000).casefold()
                 if text in nearby:
                     matching.append(i)
             if len(matching)!=1:
@@ -166,6 +186,62 @@ class BrowserSource:
         self.verify_store()
         return self.page.screenshot(type="png",full_page=False)
 
+    def _discover_coupon_units(self, category: Category) -> list[tuple[str, str]]:
+        """Traverse navigable coupon filters; require direct coupon/product proof.
+
+        A coupon page containing only generic clipping buttons or opaque
+        product membership is NOT a qualified product category.
+        """
+        root_path = urlparse(category.url).path.rstrip("/")
+        queue = [(category.url, 0)]
+        visited = set()
+        units = {category.url: (category.name + " / All Coupons", category.url)}
+        saw_source_coupon = False
+        while queue:
+            landing, depth = queue.pop(0)
+            if landing in visited:
+                continue
+            visited.add(landing)
+            if len(visited) + len(queue) > self.options.category_hard_limit:
+                raise CoverageGap("coupon filter discovery exceeded configured safety cap")
+            self._navigate(landing)
+            self.verify_store()
+            html = self.page.content() if callable(getattr(self.page, "content", None)) else ""
+            scan = scan_coupon_cards(html)
+            if scan.unresolved:
+                raise CoverageGap("coupons without verified product mapping: " + "; ".join(scan.unresolved[:4]))
+            if scan.mappings:
+                saw_source_coupon = True
+            links = self.page.eval_on_selector_all(
+                'main a[href], [role="main"] a[href]',
+                """els => els.map(a => ({href:a.href,text:(a.innerText||a.getAttribute('aria-label')||'').trim()}))"""
+            )
+            for entry in links:
+                url = str(entry.get("href") or "")
+                parsed = urlparse(url)
+                if parsed.hostname not in ("marianos.com", "www.marianos.com"):
+                    continue
+                path = parsed.path.rstrip("/")
+                parameters = parse_qs(parsed.query)
+                is_filter = path == root_path and bool({"category", "department", "filter", "cat"} & set(parameters))
+                is_child = path.startswith(root_path + "/")
+                if not (is_filter or is_child):
+                    continue
+                if url in visited or url == category.url:
+                    continue
+                if depth >= self.options.max_subcategory_depth:
+                    raise CoverageGap("coupon discovery bound reached with additional filter pages")
+                name = " ".join(str(entry.get("text") or "").split())[:120] or "Coupon filter"
+                units.setdefault(url, (name, url))
+                if not any(p == url for p, _ in queue):
+                    queue.append((url, depth + 1))
+        if not saw_source_coupon:
+            raise CoverageGap(
+                "no product-listing subcategories or coupon-to-product mappings found; "
+                "opaque coupon landing is NOT coverage"
+            )
+        return list(units.values())
+
     def discover_units(self,category:Category) -> list[tuple[str,str]]:
         """Conservatively walk subdepartment landing pages to configured depth.
 
@@ -174,6 +250,8 @@ class BrowserSource:
         Failure to discover a listing is a coverage gap, not an empty category.
         """
         root_path=urlparse(category.url).path.rstrip("/")
+        if category.name.casefold()=="coupons" and root_path.startswith("/savings/cl/coupons"):
+            return self._discover_coupon_units(category)
         if root_path.startswith(("/pl/","/q/")):
             self._navigate(category.url)
             self.verify_store()
@@ -206,10 +284,11 @@ class BrowserSource:
                     sub_name=category.name + " / Shop All"
                 if path.startswith(("/pl/","/q/")):
                     discovered.setdefault(href,(sub_name,href))
-                elif (root_path.startswith("/d/") and path.startswith(root_path+"/")
-                      and depth < max_depth and href not in visited
-                      and all(href!=x[0] for x in to_visit)):
-                    to_visit.append((href,depth+1))
+                elif root_path.startswith("/d/") and path.startswith(root_path+"/"):
+                    if depth >= max_depth:
+                        raise CoverageGap(f"unvisited child beyond category discovery depth for {category.name}: {href}")
+                    if href not in visited and all(href!=x[0] for x in to_visit):
+                        to_visit.append((href,depth+1))
                 if len(visited)+len(discovered)+len(to_visit)>self.options.category_hard_limit:
                     raise CoverageGap(f"category {category.name} exceeded safe discovery limit")
         if not discovered:
@@ -221,8 +300,16 @@ class BrowserSource:
         self._navigate(url)
         proof=self.verify_store()
         found:dict[str,dict]={p["url"]:p for p in (resume_items or []) if p.get("url")}
-        observed_card_urls=set(found)
+        # Resumed partial products do NOT count as fresh source observations.
+        observed_card_urls=set()
+        approximate_card_urls=set()
+        coupon_mode=category.name.casefold()=="coupons"
+        coupon_mappings={}
+        coupon_ids=set()
         displayed_total=None
+        terminal_seen=False
+        disabled_terminal=False
+        bottom_confirmed=False
         scroll_count=0
         page_count=0
         visited={self.page.url}
@@ -236,36 +323,62 @@ class BrowserSource:
             for n in range(self.options.max_listing_scrolls):
                 self._check_block()
                 html=self.page.content()
-                before=len(found)
-                # Count all actually linked retailer products, including approximate-weight
-                # products that must be excluded from the final JSON.
+                before=len(found) + len(coupon_mappings) + len(observed_card_urls)
+                # Count retailer-linked products, including legitimate approximate-
+                # weight exclusions. Reject any other unparseable product link.
                 scope=BeautifulSoup(html,"html.parser").select_one("main")
                 if scope:
                     for link in scope.select('a[href*="/p/"]'):
-                        observed_card_urls.add(urljoin("https://www.marianos.com",str(link.get("href") or "")).split("?",1)[0])
+                        candidate=urljoin("https://www.marianos.com",str(link.get("href") or ""))
+                        if urlparse(candidate).hostname in ("www.marianos.com","marianos.com"):
+                            observed_card_urls.add(candidate.split("?",1)[0])
+                approximate_card_urls.update(approximate_excluded_urls(html))
+                if coupon_mode:
+                    scan=scan_coupon_cards(html)
+                    if scan.unresolved:
+                        raise CoverageGap("unmapped or ambiguous coupon cards: " + "; ".join(scan.unresolved[:5]))
+                    coupon_ids.update(scan.identities)
+                    for mapping in scan.mappings:
+                        previous=coupon_mappings.get(mapping.identity)
+                        if previous and previous.terms != mapping.terms:
+                            raise CoverageGap("coupon terms changed across observed pages: " + mapping.identity)
+                        if previous and previous.product_urls != mapping.product_urls:
+                            raise CoverageGap("coupon-to-product membership changed during traversal: " + mapping.identity)
+                        coupon_mappings[mapping.identity]=mapping
                 for item in extract_cards(html,category.name,sub_name):
                     prev=found.get(item["url"])
                     if prev is None:
                         found[item["url"]]=item
                     elif not prev.get("upc") and item.get("upc"):
                         found[item["url"]]=item
-                if progress and len(found)!=before and n%5==0:
+                if progress and len(found)>0 and n%5==0:
                     progress([finalize_card(x) for x in found.values()])
+                main_text=self.page.locator("main").inner_text(timeout=5000) if self.page.locator("main").count() else ""
                 if displayed_total is None:
-                    m=PRODUCT_COUNT.search(self.page.locator("main").inner_text(timeout=5000)[:4000]) if self.page.locator("main").count() else None
+                    pattern=COUPON_COUNT if coupon_mode else PRODUCT_COUNT
+                    m=pattern.search(main_text[:4000])
                     if m:displayed_total=int(m.group(1).replace(",",""))
-                if n and len(found)==before:stable+=1
+                terminal_seen=bool(EXPLICIT_END.search(main_text[-5000:]))
+                if n and len(found)+len(coupon_mappings)+len(observed_card_urls)==before:stable+=1
                 else:stable=0
                 if n and scroll_count%self.options.verify_every==0:
                     proof=self.verify_store()
                 load_more=self.page.get_by_role("button",name=re.compile(r"^(?:load|show|view)\s+more",re.I))
-                if load_more.count() and load_more.first.is_visible() and load_more.first.is_enabled():
-                    load_more.first.click(timeout=6000)
-                    self._pace();stable=0
+                if load_more.count() and load_more.first.is_visible():
+                    if load_more.first.is_enabled():
+                        load_more.first.click(timeout=6000)
+                        self._pace();stable=0
+                    else:
+                        disabled_terminal=True
                 self.page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
                 self.page.wait_for_timeout(650)
+                at_bottom=self.page.evaluate(
+                    "Math.ceil(window.scrollY + window.innerHeight) >= document.documentElement.scrollHeight - 4"
+                )
                 scroll_count+=1
-                if stable>=4:break
+                if stable>=4 and at_bottom:
+                    bottom_confirmed=True
+                    break
             else:
                 raise CoverageGap(f"listing failed to settle after {self.options.max_listing_scrolls} scrolls for {url}")
             proof=self.verify_store()
@@ -273,35 +386,86 @@ class BrowserSource:
             next_button=self.page.locator('main nav[aria-label*="agination"] button[aria-label*="Next"], main button[aria-label="Next page"]')
             if next_link.count() and next_link.first.is_visible():
                 next_href=next_link.first.get_attribute("href")
-                next_url=urljoin(self.page.url,next_href or "")
-                if next_url==self.page.url or next_url in visited:
-                    raise CoverageGap(f"pagination loop detected: {next_url}")
-                if urlparse(next_url).hostname not in ("www.marianos.com","marianos.com"):
-                    raise CoverageGap("pagination attempted an external link")
-                visited.add(next_url)
-                self._navigate(next_url)
-                self.verify_store()
-                continue
-            if next_button.count() and next_button.first.is_visible() and next_button.first.is_enabled():
-                before_url=self.page.url
-                before_html=sha256(self.page.content().encode()).hexdigest()
-                next_button.first.click(timeout=6000)
-                self.page.wait_for_timeout(1000)
-                after_html=sha256(self.page.content().encode()).hexdigest()
-                if before_html==after_html:
-                    raise CoverageGap("next page control did not change content")
-                self.verify_store()
-                continue
+                if next_link.first.get_attribute("aria-disabled")=="true" or not next_href:
+                    disabled_terminal=True
+                else:
+                    next_url=urljoin(self.page.url,next_href)
+                    if next_url==self.page.url or next_url in visited:
+                        raise CoverageGap(f"pagination loop detected: {next_url}")
+                    if urlparse(next_url).hostname not in ("www.marianos.com","marianos.com"):
+                        raise CoverageGap("pagination attempted an external link")
+                    visited.add(next_url)
+                    self._navigate(next_url)
+                    self.verify_store()
+                    bottom_confirmed=False
+                    disabled_terminal=False
+                    continue
+            if next_button.count() and next_button.first.is_visible():
+                if next_button.first.is_enabled():
+                    before_html=sha256(self.page.content().encode()).hexdigest()
+                    next_button.first.click(timeout=6000)
+                    self.page.wait_for_timeout(1000)
+                    after_html=sha256(self.page.content().encode()).hexdigest()
+                    if before_html==after_html:
+                        raise CoverageGap("next page control did not change content")
+                    self.verify_store()
+                    bottom_confirmed=False
+                    disabled_terminal=False
+                    continue
+                disabled_terminal=True
             break
-        if not found:
-            raise CoverageGap(f"zero products on {url}; blocked/empty not accepted")
-        if displayed_total is not None and len(observed_card_urls)<max(1,math.ceil(displayed_total*0.90)):
-            raise CoverageGap(f"silent truncation on {url}: {len(observed_card_urls)} observed product cards vs {displayed_total} displayed products (before approximate-weight exclusions)")
+        if coupon_mode:
+            if not coupon_mappings or set(coupon_mappings)!=coupon_ids:
+                raise CoverageGap("coupon list had no complete coupon-to-product mappings")
+            authorized_products={}
+            for mapping in coupon_mappings.values():
+                for product_url in mapping.product_urls:
+                    item=dict(authorized_products.get(product_url) or found.get(product_url) or {
+                        "category":category.name,"sub_category":sub_name,
+                        "product_title":"","weight":"","regular_price":"","sale_price":"",
+                        "volume_deals_description":"","volume_deals_price":"",
+                        "digital_deals_description":"","digital_deals_price":"",
+                        "image_url":"","url":product_url,"upc":"","ppm":"","store_brand":"no"
+                    })
+                    # The coupon card heading is NOT sufficient evidence of
+                    # the linked product's actual name: read its detail page.
+                    item["product_title"]=""
+                    offers=list(item.get("_offers",[]))
+                    if (mapping.terms,"") not in offers:
+                        offers.append((mapping.terms,""))
+                    item["_offers"]=offers
+                    authorized_products[product_url]=item
+            found=authorized_products
+            observed_identity_count=len(coupon_ids)
+            resolved_identity_count=len(coupon_mappings)
+        else:
+            parsed_urls={k.split("?",1)[0] for k in found}
+            stale=parsed_urls-observed_card_urls
+            unresolved=observed_card_urls-parsed_urls-approximate_card_urls
+            if stale:
+                raise CoverageGap(f"resume has products absent from freshly observed listing: {sorted(stale)[:4]}")
+            if unresolved:
+                raise CoverageGap(f"unparseable product identities, not legitimate weight exclusions: {sorted(unresolved)[:4]}")
+            observed_identity_count=len(observed_card_urls)
+            resolved_identity_count=len(observed_card_urls & (parsed_urls|approximate_card_urls))
+        try:
+            coverage=verify_completion(Completion(
+                source_total=displayed_total,
+                observed_identities=observed_identity_count,
+                resolved_identities=resolved_identity_count,
+                explicit_end=terminal_seen,
+                disabled_terminal_control=disabled_terminal,
+                stable_at_bottom=bottom_confirmed,
+                pages=page_count,
+                listing_kind="coupons" if coupon_mode else "products",
+            ))
+        except IncompleteListing as exc:
+            raise CoverageGap(f"no positive end-of-list proof for {url}: {exc}") from exc
         proof=self.verify_store()
         items=[]
         for k,original in enumerate(found.values(),start=1):
             product=dict(original)
-            if self.options.max_detail_pages and k<=self.options.max_detail_pages:
+            if coupon_mode or (self.options.max_detail_pages and k<=self.options.max_detail_pages):
                 if k%self.options.verify_every==0:
                     proof=self.verify_store()
                 cached=self.detail_cache.get(product["url"])
@@ -309,6 +473,9 @@ class BrowserSource:
                     cached=product
                 if cached is None:
                     self._navigate(product["url"])
+                    if coupon_mode and urlparse(self.page.url).hostname in ("marianos.com","www.marianos.com"):
+                        if urlparse(self.page.url).path != urlparse(product["url"]).path:
+                            raise CoverageGap("coupon-linked product was redirected to a different product identity")
                     self.verify_store()
                     details=self.page.content()
                     self._check_block()
@@ -324,7 +491,7 @@ class BrowserSource:
                 items.append(product)
         self.verify_store()
         LOG.info("listing_complete",extra={"category":category.name,"sub_category":sub_name,"url":url,"count":len(items),"displayed_total":displayed_total,"scrolls":scroll_count,"pages":page_count})
-        return CrawlOutcome(items=items,proof=proof,observed_count=displayed_total,screenshots=[])
+        return CrawlOutcome(items=items,proof=proof,observed_count=displayed_total,screenshots=[],coverage=coverage)
 
     def _check_block(self):
         text=self.page.locator("body").inner_text(timeout=6000)[:5000]

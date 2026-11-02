@@ -1,8 +1,27 @@
 # Mariano's Azure catalog collector
 
-**v0.4.1 engineering qualification build — cross-platform offline-tested; not yet retailer-qualified or Azure-deployed.**
+**v0.5.0 engineering qualification build — cross-platform offline-tested; NOT yet retailer-qualified or Azure-deployed.**
 
 This is runnable source code with a Playwright browser collector, category discovery from the client's *entire* 28-category CSV, location guardrails, exact JSON schema, checkpoints, a two-days-per-week Azure Container Apps Job recipe, Azure Blob immutable exports, and last-known-good publication. It has offline automated tests, including a real Chromium/Playwright DOM integration test. It is **not** a retailer-observed 500-record contest submission or evidence of live retailer or Azure qualification.
+
+## v0.5.0 positive-coverage and coupon safeguards (2026-11-02)
+
+See [the v0.5.0 evidence and acceptance runbook](docs/V050_POSITIVE_COVERAGE_AND_RELEASE.md).
+The collector now requires a **retailer-observed positive end-of-results signal**
+before a browser unit can be checkpointed or published: exact source-displayed
+counts or explicit retailer terminal control, plus settled bottom-of-page
+navigation and full source-card reconciliation. No more 90% count tolerance.
+Coupon pages require directly linked products with a stable offer identity
+and full digital activation terms; otherwise the job fails. Observed
+promotion strings longer than 400 characters are no longer discarded.
+The selected-store picker now distinguishes individual result rows from the
+global picker. Authorized walkthrough recording can be opted into using
+`MARIANOS_ACCEPTANCE_VIDEO_DIR` on a private writable disk.
+
+This remains **NO_GO** for live/contest acceptance without signed website
+collection authorization, assigned store selection, authentic 500+ product
+data, complete category/coupon proof, actual Azure execution, independent
+review and a genuine walkthrough. Offline tests DO NOT fill those gaps.
 
 ## Important permission boundary
 

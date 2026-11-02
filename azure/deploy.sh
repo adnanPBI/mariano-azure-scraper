@@ -23,7 +23,7 @@ if [[ ! -f config/stores.yaml ]]; then
 fi
 : "${AZ_JOB_NAME:=marianos-scraper}"
 : "${AZ_IDENTITY_NAME:=marianos-scraper-identity}"
-TAG="${SCRAPER_IMAGE_TAG:-v0.4.0}"
+TAG="${SCRAPER_IMAGE_TAG:-v0.5.0}"
 # All credential/document validation occurs before ANY cloud mutation.
 # Validate original signed evidence before uploading it to a private Blob prefix.
 # The agreement document itself is NOT copied into the Docker image.

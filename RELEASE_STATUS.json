@@ -1,15 +1,15 @@
 ﻿{
     "project":  "Mariano\u0027s Azure catalog collector",
-    "version":  "0.4.1",
-    "qualification_status":  "NO_GO_EXTERNAL_RIGHTS_AND_AZURE_ACCESS",
+    "version":  "0.5.0",
+    "qualification_status":  "NO_GO_AUTHORIZATION_STORES_SOURCE_AZURE_AND_WITNESSED_ACCEPTANCE",
     "verified_local":  {
-                           "tests_passed":  43,
+                           "tests_passed":  65,
                            "tests_failed":  0,
-                           "test_kind":  "43 offline RND Windows Python 3.12 tests, includes Chromium synthetic browser fixture and v0.5.7-adapted rename regressions",
+                           "test_kind":  "65 offline RND Windows Python 3.12 tests; synthetic real-Chromium store-picker/coupon/page-end regressions; no retailer or cloud access",
                            "configured_categories_from_client_csv":  28,
                            "ordered_json_fields":  22,
                            "permission_guard":  "tested, refuses live operation without explicit authorization settings",
-                           "last_good_protection":  "tested with interruption, empty and thin scenarios",
+                           "last_good_protection":  "tested with interruption, thin/empty runs, positive-only source checkpoints, before/after synchronous rename stalls",
                            "azure_deployment_script":  "shell syntax checked, not executed",
                            "azure_cli":  "2.91.0 installed on RND, portable, no admin",
                            "azure_containerapp_extension":  "1.3.0b5 installed in isolated config",
@@ -29,11 +29,14 @@
     "azure_deployment_performed":  false,
     "client_data_set_fabricated":  false,
     "source_licensing":  "Third party site and data rights must be confirmed separately before production use",
-    "last_review_date":  "2026-10-18",
+    "last_review_date":  "2026-11-02",
     "test_count":  43,
     "test_result":  "43 offline tests passed on RND Windows Python 3.12 (2026-11-02)",
     "production_status":  "NO_GO",
     "azure_deployed":  false,
     "live_retailer_tested":  false,
-    "authorized_live_collection":  false
+    "authorized_live_collection":  false,
+    "positive_source_completion":  "source total exact match or explicit terminal signal and fully reconciled observed links; real site unverified",
+    "coupon_product_link_gate":  "source coupon identity, explicit activation terms, first-party direct product URLs; live source DOM unverified",
+    "accepting_run_hash":  ""
 }

@@ -94,6 +94,7 @@ class Pipeline:
             combined=[]
             count_per_cat=Counter()
             subcat_map=defaultdict(list)
+            completion_evidence=defaultdict(list)
             proofs=[]
             proof_keys=[]
             try:
@@ -123,20 +124,39 @@ class Pipeline:
                                 items=checkpoint["items"]
                                 if not checkpoint.get("proof"):
                                     raise CoverageGap("checkpoint without location proof")
+                                if getattr(source, "requires_positive_coverage", False) and not (
+                                    isinstance(checkpoint.get("coverage"), dict)
+                                    and checkpoint["coverage"].get("passed") is True
+                                ):
+                                    raise CoverageGap("completed source checkpoint lacks positive pagination-end evidence")
+                                if checkpoint.get("coverage"):
+                                    completion_evidence[cat.name].append(checkpoint["coverage"])
                                 proofs.append(checkpoint["proof"])
                                 LOG.info("unit_resume",extra={"store":store.id,"category":cat.name,"subcategory":sub_name,"items":len(items)})
                             else:
-                                partial=checkpoint.get("items",[]) if checkpoint and not force and checkpoint.get("store_id")==store.id else []
+                                partial=(checkpoint.get("items",[]) if checkpoint and not force
+                                         and checkpoint.get("store_id")==store.id
+                                         and checkpoint.get("category")==cat.name
+                                         and checkpoint.get("subcategory")==sub_name
+                                         and checkpoint.get("url")==url else [])
                                 def on_progress(items):
                                     self.storage.assert_healthy()
                                     self.storage.put_json(ukey,{"complete":False,"store_id":store.id,"category":cat.name,"url":url,"collected_date":datetime.now(ZoneInfo("America/Chicago")).date().isoformat(),"items":items})
                                 outcome=source.crawl_listing(cat,sub_name,url,progress=on_progress,resume_items=partial)
                                 items=outcome.items
                                 proofs.append(outcome.proof)
+                                if getattr(source, "requires_positive_coverage", False) and not (
+                                    isinstance(outcome.coverage, dict)
+                                    and outcome.coverage.get("passed") is True
+                                ):
+                                    raise CoverageGap("source unit lacks positive end-of-results evidence")
+                                if outcome.coverage:
+                                    completion_evidence[cat.name].append(outcome.coverage)
                                 # Completed unit is atomically committed only after proof and nonzero results.
                                 if not outcome.proof or not items:
                                     raise CoverageGap(f"incomplete unit {url}")
-                                self.storage.put_json(ukey,{"complete":True,"store_id":store.id,"category":cat.name,"subcategory":sub_name,"url":url,"proof":outcome.proof,"observed_count":outcome.observed_count,"collected_date":datetime.now(ZoneInfo("America/Chicago")).date().isoformat(),"items":items})
+                                self.storage.put_json(ukey,{"complete":True,"store_id":store.id,"category":cat.name,"subcategory":sub_name,"url":url,"proof":outcome.proof,"observed_count":outcome.observed_count,"coverage":outcome.coverage,
+                                                       "collected_date":datetime.now(ZoneInfo("America/Chicago")).date().isoformat(),"items":items})
                             for item in items:
                                 data={**item,"zipcode":store.zipcode,"store_name":store.name,"store_location":store.address,"store_logo":(store.logo_url or getattr(source,"logo_url",""))}
                                 obj=record(data,(checkpoint.get("collected_date") if checkpoint and not force and checkpoint.get("complete") else datetime.now(ZoneInfo("America/Chicago")).date().isoformat()))
@@ -178,6 +198,8 @@ class Pipeline:
                 self.storage.assert_healthy()
                 report=_summarize(items,dict(exported_counts),dict(subcat_map),duplicate_count,previous,store,slot,started)
                 report["eligible_category_counts_before_dedup"]=dict(count_per_cat)
+                report["positive_listing_evidence_by_category"]=dict(completion_evidence)
+                report["positive_completion_unit_count"]=sum(len(v) for v in completion_evidence.values())
                 data=json.dumps(items,ensure_ascii=False,separators=(",", ":")).encode("utf-8")
                 digest=sha256(data).hexdigest()
                 report["sha256"]=digest

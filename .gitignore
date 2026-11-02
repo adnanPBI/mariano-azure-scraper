@@ -6,3 +6,11 @@ local-state/
 __pycache__/
 *.pyc
 *.egg-info/
+recordings/
+acceptance-video/
+qa/*.webm
+qa/*.mp4
+qa/*_temp/
+qa/*_junit.xml
+build/
+dist/

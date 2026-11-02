@@ -26,7 +26,7 @@ class Store:
 @dataclass(frozen=True)
 class Options:
     max_listing_scrolls: int = 125
-    max_subcategory_depth: int = 3
+    max_subcategory_depth: int = 12
     min_records_per_store: int = 500
     min_per_category: int = 1
     prior_yield_ratio: float = .65
@@ -41,7 +41,7 @@ class Options:
     # CSS selectors are configurable; if no store proof is detected, stop (no loose matching).
     store_selector_button: str = 'button:has-text("Pickup"), button:has-text("Store")'
     store_search_input: str = 'input[placeholder*="ZIP"], input[placeholder*="City"], input[placeholder*="zip"]'
-    store_result_selector: str = 'button:has-text("Select Store"), button:has-text("Shop This Store")'
+    store_result_selector: str = 'button:has-text("Shop This Store"), button:has-text("Select This Store")'
     store_proof_selector: str = 'header, [data-testid="store-location"], [aria-label*="Pickup at"]'
 
 def load_categories(path: str) -> list[Category]:
@@ -86,7 +86,7 @@ def load_settings(path: str) -> tuple[list[Store],Options]:
             raise ValueError("placeholder store settings must be replaced with verified values")
     options=Options(**obj.get("options", {}))
     if (options.max_listing_scrolls<6 or options.max_detail_pages<0
-            or options.verify_every<1 or not (0 <= options.max_subcategory_depth <= 6)):
+            or options.verify_every<1 or not (0 <= options.max_subcategory_depth <= 24)):
         raise ValueError("invalid scroll, detail or location-verification limits")
     if options.min_records_per_store<1 or options.min_per_category<1:
         raise ValueError("minimum yield and category requirements must be positive")
