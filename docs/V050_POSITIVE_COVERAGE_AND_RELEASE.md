@@ -19,7 +19,9 @@ cannot be substituted for a real 500-product export.
    control; additionally require four settled iterations at the bottom
    and no enabled Next/Load More control. Do not treat mere lack of products
    or a blocked response as completion.
-4. **Category expansion:** increase depth limit from 3 to 12 (operator cap
+4. **Category expansion:** remove the hard-coded 80-page pagination cutoff
+   in favor of a configurable 800-page safety ceiling (1-3000 allowed);
+   increase depth limit from 3 to 12 (operator cap
    <=24); discovering child departments beyond the configured cap fails
    explicitly rather than omitting their products.
 5. **Coupon mapping:** recursively examine URL-addressable coupon filters.

@@ -10,6 +10,7 @@ stores:
     canary_urls: []
 options:
   max_listing_scrolls: 125
+  max_listing_pages: 800 # safety ceiling, not an 80-page hard-coded collection cap
   max_subcategory_depth: 12 # fail closed if deeper child pages are detected
   min_records_per_store: 500
   min_per_category: 1

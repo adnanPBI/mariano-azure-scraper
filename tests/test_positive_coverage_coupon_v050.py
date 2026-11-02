@@ -15,6 +15,29 @@ from marianos_scraper.extract import extract_cards, approximate_excluded_urls
 from marianos_scraper.promotions import classify
 
 
+def test_pagination_safety_cap_is_configurable():
+    from marianos_scraper.config import Options
+    assert Options().max_listing_pages == 800
+    assert Options(max_listing_pages=1200).max_listing_pages == 1200
+
+
+@pytest.mark.parametrize("invalid", [0, 3001])
+def test_invalid_listing_page_ceiling_is_rejected(tmp_path, invalid):
+    from marianos_scraper.config import load_settings
+    path=tmp_path/"stores.yaml"
+    path.write_text(
+        "stores:\n"
+        "  - id: offline-store\n"
+        "    zipcode: '60640'\n"
+        "    name: Mariano's\n"
+        "    address: 123 Example St, Chicago\n"
+        "    verification_text: 123 Example St\n"
+        f"options:\n  max_listing_pages: {invalid}\n"
+    )
+    with pytest.raises(ValueError,match="invalid scroll"):
+        load_settings(str(path))
+
+
 def test_exact_source_total_is_positive_coverage():
     evidence=verify_completion(Completion(3,3,3,False,False,True,pages=2))
     assert evidence["passed"]

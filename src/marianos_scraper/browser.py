@@ -317,8 +317,8 @@ class BrowserSource:
         # Both must complete before the unit is durably committed.
         while True:
             page_count+=1
-            if page_count>80:
-                raise CoverageGap(f"pagination exceeded 80 pages: {url}")
+            if page_count>self.options.max_listing_pages:
+                raise CoverageGap(f"pagination exceeded configured page safety cap ({self.options.max_listing_pages}): {url}")
             stable=0
             for n in range(self.options.max_listing_scrolls):
                 self._check_block()
