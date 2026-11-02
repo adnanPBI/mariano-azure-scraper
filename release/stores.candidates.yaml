@@ -1,0 +1,14 @@
+# Publicly discoverable store page references ONLY. Not selected, not validated, not authorized.
+# Never copy these to active stores.yaml without verifying location in authorized session.
+stores:
+  - id: '531_00515'
+    retailer_page_reference: '531/00515'
+    zipcode: '60640'
+    name: "Mariano's Ravenswood"
+    address: '1800 W Lawrence Ave, Chicago, IL 60640'
+    verification_text: '1800 W Lawrence Ave'
+    status: 'unverified_candidate'
+  - id: '531_00512'
+    retailer_page_reference: '531/00512'
+    name: "Mariano's South Loop"
+    status: 'unverified_candidate'

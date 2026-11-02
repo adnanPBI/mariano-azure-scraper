@@ -1,0 +1,59 @@
+{
+  "status": "NO_GO",
+  "checks": {
+    "manifest": {
+      "passed": true,
+      "count": 28,
+      "names": [
+        "Coupons",
+        "Produce",
+        "Meat",
+        "Seafood",
+        "Deli",
+        "Bakery",
+        "Floral",
+        "Grocery",
+        "Dairy",
+        "Frozen",
+        "Natural Organic",
+        "Beverages",
+        "Breakfast",
+        "Coffee",
+        "Candy",
+        "Beer Wine Liquor",
+        "Health",
+        "Personal Care",
+        "Beauty",
+        "Baby",
+        "Household",
+        "Kitchen Dining",
+        "Pet Supplies",
+        "Candles Home Fragrances",
+        "Batteries",
+        "Light Bulbs",
+        "School Office",
+        "Hardware Home Improvement"
+      ]
+    },
+    "stores": {
+      "passed": false,
+      "reason": "[Errno 2] No such file or directory: 'config/stores.yaml'"
+    },
+    "authorization": {
+      "passed": false,
+      "reason": "Authorization metadata not supplied"
+    },
+    "live_export": {
+      "status": "not_run",
+      "reason": "No actual retailer export supplied"
+    },
+    "azure": {
+      "passed": false,
+      "reason": "No Azure observed execution evidence"
+    },
+    "observed_acceptance": {
+      "passed": false,
+      "reason": "Independent retailer-observed manual comparison, pause/restart, subcategory and coupon audit not signed off"
+    }
+  }
+}

@@ -1,0 +1,9 @@
+.git
+local-state/
+__pycache__/
+.pytest_cache/
+.env
+.env.*
+config/stores.yaml
+*.pyc
+*.zip

@@ -1,0 +1,23 @@
+# Copy to config/stores.yaml and replace values with the AUTHORIZED store.
+# The id is the retailer's confirmed unique store id, not a ZIP code.
+stores:
+  - id: "REPLACE_WITH_VERIFIED_STORE_ID"
+    zipcode: "REPLACE_WITH_ZIP"
+    name: "Mariano's"
+    address: "REPLACE_WITH_VERIFIED_STREET_CITY_STATE_ZIP"
+    verification_text: "REPLACE_WITH_UNIQUE_STREET_ADDRESS_VISIBLE_IN_HEADER"
+    logo_url: ""
+    canary_urls: []
+options:
+  max_listing_scrolls: 125
+  min_records_per_store: 500
+  min_per_category: 1
+  prior_yield_ratio: 0.65
+  prior_category_ratio: 0.50
+  min_subcategory_retention: 0.65
+  max_detail_pages: 50000 # product page enrichment for UPC, PPM and offer terms
+  timeout_ms: 35000
+  delay_seconds: 1.5
+  verify_every: 20
+  category_hard_limit: 1500
+  browser_headless: true

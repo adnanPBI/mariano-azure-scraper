@@ -1,0 +1,23 @@
+{
+  "reviewer": "REPLACE_WITH_INDEPENDENT_CLIENT_REVIEWER",
+  "reviewed_at_utc": "REPLACE_WITH_REAL_UTC_TIMESTAMP",
+  "sampled_records": 0,
+  "store_ids": [
+    "REPLACE_WITH_REAL_STORE_ID"
+  ],
+  "export_sha256": "REPLACE_WITH_SHA256_OF_GENUINE_EXPORT",
+  "azure_execution_id": "REPLACE_WITH_REAL_AZURE_JOB_EXECUTION_ID",
+  "claims": {
+    "retailer_collection_rights_human_verified": false,
+    "actual_store_selection_and_price_location_verified": false,
+    "all_28_categories_and_applicable_subcategories_reviewed": false,
+    "coupon_to_product_mapping_and_limits_reviewed": false,
+    "ppm_source_text_and_units_reviewed": false,
+    "volume_and_digital_deals_separately_reviewed": false,
+    "random_records_compared_with_retailer": false,
+    "interruption_and_same_slot_resume_witnessed": false,
+    "repeat_observed_run_witnessed": false,
+    "last_successful_dataset_survived_failed_run": false
+  },
+  "signature_base64": "REPLACE_WITH_ED25519_SIGNATURE_OF_CANONICAL_JSON_EXCLUDING_SIGNATURE_BASE64"
+}

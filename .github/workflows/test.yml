@@ -1,0 +1,57 @@
+name: Mariano's offline acceptance and source build
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: marianos-offline-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  offline-matrix:
+    name: ${{ matrix.os }} / Python ${{ matrix.python }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            python: '3.11'
+          - os: ubuntu-latest
+            python: '3.12'
+          - os: windows-latest
+            python: '3.12'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+      - name: Install scraper and offline test dependencies
+        run: python -m pip install -e ".[test]"
+      - name: Install isolated Chromium for localhost fixtures
+        run: python -m playwright install chromium
+      - name: Install Linux browser prerequisites
+        if: runner.os == 'Linux'
+        run: python -m playwright install-deps chromium
+      - name: Verify complete original category CSV (without approving placeholder store)
+        run: python -m pytest -q tests/test_schema_and_extract.py::test_all_required_csv_categories_read
+      - name: Run all offline tests (never access retailer or paid providers)
+        run: python -m pytest -q tests --junitxml=offline-junit.xml --basetemp=offline-pytest-temp
+      - name: Build distributable wheel and source archive
+        run: |
+          python -m pip install build
+          python -m build
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: offline-${{ matrix.os }}-py${{ matrix.python }}
+          path: |
+            offline-junit.xml
+            dist/*
+          if-no-files-found: ignore

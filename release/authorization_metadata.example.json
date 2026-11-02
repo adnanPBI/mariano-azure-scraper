@@ -1,0 +1,16 @@
+{
+  "retailer": "Mariano's / Kroger",
+  "grantor": "REPLACE_WITH_AUTHORIZED_GRANTOR",
+  "agreement_id": "REPLACE_WITH_SIGNED_CONTRACT_ID",
+  "effective_date": "2026-10-18",
+  "expiry_date": "2027-10-18",
+  "authorized_access_method": "REPLACE_WITH_APPROVED_METHOD_AND_TERMS",
+  "store_ids": ["531/00515"],
+  "authorized_categories": [],
+  "collection_frequency_per_week": 2,
+  "commercial_storage_permitted": false,
+  "historical_retention_permitted": false,
+  "promotion_and_coupon_collection_permitted": false,
+  "signed_agreement_file": "REPLACE_WITH_LOCAL_PATH_TO_APPROVED_DOCUMENT",
+  "signed_agreement_sha256": "REPLACE_WITH_ACTUAL_SHA256"
+}
