@@ -15,8 +15,9 @@ import time
 from dataclasses import dataclass
 from urllib.parse import urlparse,urljoin,parse_qs
 from playwright.sync_api import Page, sync_playwright, Error as PlaywrightError
-from .config import Category,Store,Options
-from .extract import extract_cards, enrich_from_details, finalize_card, approximate_excluded_urls
+from .config import Category,Store,Options,require_source_context_config
+from .extract import extract_cards, extract_detail_fields, apply_detail_fields, finalize_card, approximate_excluded_urls, DetailIdentityError
+from .source_context import SourceResponseLedger, SourceContextError
 from .coverage import Completion, EXPLICIT_END, verify_completion, IncompleteListing
 from .coupons import scan_coupon_cards
 
@@ -41,9 +42,11 @@ class CrawlOutcome:
     observed_count: int | None
     screenshots: list[str]
     coverage: dict | None = None
+    source_evidence: dict | None = None
 
 class BrowserSource:
     requires_positive_coverage = True
+    requires_source_price_binding = True
     def __init__(self,store:Store, options:Options):
         self.store=store
         self.options=options
@@ -51,12 +54,17 @@ class BrowserSource:
         self.browser=None
         self.context=None
         self.page:Page|None=None
-        self.detail_cache:dict[str,dict]={}
+        self.detail_cache:dict[tuple[str,str,str],dict]={}
+        self.source_ledger:SourceResponseLedger|None=None
         self.logo_url=""
         self._requests=0
         self._failures=0
 
     def __enter__(self):
+        # A public directory URL or local header label does NOT prove that
+        # product prices belong to the selected retailer ID/fulfillment.
+        require_source_context_config(self.store)
+        self.source_ledger=SourceResponseLedger(self.store)
         self._playwright=sync_playwright().start()
         self.browser=self._playwright.chromium.launch(headless=self.options.browser_headless, args=["--disable-dev-shm-usage"])
         context_args={"locale":"en-US","timezone_id":"America/Chicago",
@@ -71,6 +79,9 @@ class BrowserSource:
         self.context=self.browser.new_context(**context_args)
         self.page=self.context.new_page()
         self.page.set_default_timeout(self.options.timeout_ms)
+        # Observe existing authorized browsing responses only. No shadow
+        # APIs, independent replay or paid provider requests are made.
+        self.context.on("requestfinished",self._capture_source_response)
         self._navigate("https://www.marianos.com/")
         self._select_store()
         self.verify_store()
@@ -82,6 +93,32 @@ class BrowserSource:
         if self.context:self.context.close()
         if self.browser:self.browser.close()
         if self._playwright:self._playwright.stop()
+
+    def _capture_source_response(self, request):
+        """Inspect only completed, allowlisted first-party requests in this session.
+
+        The typed observation schema is a contract awaiting real authorized
+        Mariano's source qualification. Missing/mismatched responses block
+        publication; the source path is NOT guessed from Walmart/Oxylabs.
+        """
+        ledger=self.source_ledger
+        if ledger is None or request.resource_type not in ("xhr","fetch"):
+            return
+        if not ledger.accepts_response_url(request.url):
+            return
+        try:
+            response=request.response()
+            if response is None or response.status!=200:
+                raise SourceContextError("configured price source response was unsuccessful")
+            ctype=response.header_value("content-type") or ""
+            if "json" not in ctype.lower():
+                raise SourceContextError("configured price source returned non-JSON data")
+            ledger.ingest(response.url,response.json())
+        except Exception as exc:
+            ledger.mark_rejected(type(exc).__name__ + ": " + str(exc))
+            LOG.error("source_price_response_rejected",extra={
+                "store":self.store.id,"error":type(exc).__name__,
+            })
 
     def _assert_response(self,response):
         if response is None:
@@ -170,6 +207,11 @@ class BrowserSource:
         if not text:
             if allow_unselected:return ""
             raise StoreMismatch(f"cannot VERIFY selected store via unique address {self.store.verification_text!r}; refusing collection")
+        if self.source_ledger and self.source_ledger._rejected:
+            raise StoreMismatch(
+                "source response contradicted store/fulfillment/price binding: "
+                + self.source_ledger._rejected[0]
+            )
         try:
             logos=self.page.locator('header img[alt*="Mariano"], header a[aria-label*="Mariano"] img')
             if logos.count():
@@ -299,7 +341,12 @@ class BrowserSource:
     def crawl_listing(self,category:Category, sub_name:str, url:str, progress=None, resume_items=None) -> CrawlOutcome:
         self._navigate(url)
         proof=self.verify_store()
-        found:dict[str,dict]={p["url"]:p for p in (resume_items or []) if p.get("url")}
+        # A partial checkpoint is a restart hint, not fresh source evidence.
+        # Reobserve each URL and replace every stale price/offer/field.
+        resumed_urls={p["url"] for p in (resume_items or []) if p.get("url")}
+        found:dict[str,dict]={}
+        LOG.info("partial_recovery_reobserve",extra={"store":self.store.id,
+            "items":len(resumed_urls)})
         # Resumed partial products do NOT count as fresh source observations.
         observed_card_urls=set()
         approximate_card_urls=set()
@@ -346,11 +393,10 @@ class BrowserSource:
                             raise CoverageGap("coupon-to-product membership changed during traversal: " + mapping.identity)
                         coupon_mappings[mapping.identity]=mapping
                 for item in extract_cards(html,category.name,sub_name):
-                    prev=found.get(item["url"])
-                    if prev is None:
-                        found[item["url"]]=item
-                    elif not prev.get("upc") and item.get("upc"):
-                        found[item["url"]]=item
+                    # The newest observed card replaces any prior card fields,
+                    # including prices and offer terms. Never reuse stale
+                    # partial data solely because its URL reappeared.
+                    found[item["url"]]=item
                 if progress and len(found)>0 and n%5==0:
                     progress([finalize_card(x) for x in found.values()])
                 main_text=self.page.locator("main").inner_text(timeout=5000) if self.page.locator("main").count() else ""
@@ -430,7 +476,9 @@ class BrowserSource:
                     # The coupon card heading is NOT sufficient evidence of
                     # the linked product's actual name: read its detail page.
                     item["product_title"]=""
-                    offers=list(item.get("_offers",[]))
+                    # Coupon mapping terms replace incidental card-offer text
+                    # to avoid inserting the same coupon twice.
+                    offers=list(authorized_products.get(product_url,{}).get("_offers",[]))
                     if (mapping.terms,"") not in offers:
                         offers.append((mapping.terms,""))
                     item["_offers"]=offers
@@ -462,36 +510,41 @@ class BrowserSource:
         except IncompleteListing as exc:
             raise CoverageGap(f"no positive end-of-list proof for {url}: {exc}") from exc
         proof=self.verify_store()
+        if self.options.max_detail_pages and len(found)>self.options.max_detail_pages:
+            raise CoverageGap(
+                f"detail-page cap {self.options.max_detail_pages} is insufficient "
+                f"for {len(found)} products; refusing partial enrichment"
+            )
         items=[]
         for k,original in enumerate(found.values(),start=1):
             product=dict(original)
-            if coupon_mode or (self.options.max_detail_pages and k<=self.options.max_detail_pages):
-                if k%self.options.verify_every==0:
-                    proof=self.verify_store()
-                cached=self.detail_cache.get(product["url"])
-                if cached is None and product.get("_fully_enriched"):
-                    cached=product
-                if cached is None:
-                    self._navigate(product["url"])
-                    if coupon_mode and urlparse(self.page.url).hostname in ("marianos.com","www.marianos.com"):
-                        if urlparse(self.page.url).path != urlparse(product["url"]).path:
-                            raise CoverageGap("coupon-linked product was redirected to a different product identity")
-                    self.verify_store()
-                    details=self.page.content()
-                    self._check_block()
-                    cached=enrich_from_details(dict(product),details)
-                    self.detail_cache[product["url"]]=cached
-                product=dict(cached)
-                # Detailed product parsing may exclude approximate-weight items.
-                if not product:continue
-            else:
-                product=finalize_card(product)
+            if k%self.options.verify_every==0:
+                proof=self.verify_store()
+            # Cache ONLY product-identity-bound detail facts. Never cache the
+            # whole category-specific dict or coupon terms: these must come
+            # from the fresh work unit, including multiple coupon filters.
+            cache_key=(self.store.id,self.store.fulfillment_mode,
+                       product["url"].split("?",1)[0])
+            detail_patch=self.detail_cache.get(cache_key)
+            if detail_patch is None:
+                self._navigate(product["url"])
+                if urlparse(self.page.url).hostname in ("marianos.com","www.marianos.com"):
+                    if urlparse(self.page.url).path.rstrip("/") != urlparse(product["url"]).path.rstrip("/"):
+                        raise CoverageGap("product-detail redirect changed canonical identity")
+                self.verify_store()
+                details=self.page.content()
+                self._check_block()
+                detail_patch=extract_detail_fields(details,product["url"])
+                self.detail_cache[cache_key]=detail_patch
+            product=apply_detail_fields(product,detail_patch)
             if product:
                 product.pop("_fully_enriched",None)
                 items.append(product)
         self.verify_store()
+        source_proof=self.source_ledger.audit_unit(items) if self.source_ledger else None
         LOG.info("listing_complete",extra={"category":category.name,"sub_category":sub_name,"url":url,"count":len(items),"displayed_total":displayed_total,"scrolls":scroll_count,"pages":page_count})
-        return CrawlOutcome(items=items,proof=proof,observed_count=displayed_total,screenshots=[],coverage=coverage)
+        return CrawlOutcome(items=items,proof=proof,observed_count=displayed_total,
+                            screenshots=[],coverage=coverage,source_evidence=source_proof)
 
     def _check_block(self):
         text=self.page.locator("body").inner_text(timeout=6000)[:5000]

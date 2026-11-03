@@ -24,7 +24,7 @@ EXAMPLE_HTML='''
   </article>
 </main></body></html>
 '''
-DETAIL_HTML='''<main><h1>Kroger® Pasta Shells</h1><p>UPC: 0001234000078</p>
+DETAIL_HTML='''<link rel="canonical" href="https://www.marianos.com/p/kroger-pasta/0001234000078"/><main><h1>Kroger® Pasta Shells</h1><p>UPC: 0001234000078</p>
  <script type="application/ld+json">{"@type":"Product","gtin13":"0001234000078","name":"Kroger Pasta"}</script>
  <span data-testid="ppm">$0.19/oz</span></main>'''
 

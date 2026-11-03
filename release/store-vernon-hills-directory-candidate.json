@@ -1,0 +1,15 @@
+{
+  "record_type": "public_store_directory_candidate_only",
+  "retailer": "Mariano's",
+  "assigned_demo_address": "1720 N Milwaukee Ave, Vernon Hills, IL 60061",
+  "zipcode": "60061",
+  "official_public_store_page": "https://www.marianos.com/stores/grocery/il/vernon-hills/marianos-vernon-hills/531/00502",
+  "official_directory_path_reference": "531/00502",
+  "store_page_mentions": ["Pickup", "Delivery", "In-Store"],
+  "source_response_store_id_verified": false,
+  "same_session_fulfillment_verified": false,
+  "same_session_local_prices_verified": false,
+  "authorized_acquisition_trace_available": false,
+  "approved_price_response_paths": [],
+  "note": "Public source locator is not evidence of selected store ID in a shopping session or prices. Do not use this JSON as stores.yaml."
+}

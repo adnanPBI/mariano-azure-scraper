@@ -22,6 +22,9 @@ class Store:
     verification_text: str
     logo_url: str = ""
     canary_urls: list[str] = field(default_factory=list)
+    source_store_ref: str = ""  # e.g. 531/00502, MUST match returned source
+    fulfillment_mode: str = ""  # e.g. PICKUP; must be returned by source
+    price_response_paths: list[str] = field(default_factory=list)  # observed authorized XHR routes
 
 @dataclass(frozen=True)
 class Options:
@@ -44,6 +47,18 @@ class Options:
     store_search_input: str = 'input[placeholder*="ZIP"], input[placeholder*="City"], input[placeholder*="zip"]'
     store_result_selector: str = 'button:has-text("Shop This Store"), button:has-text("Select This Store")'
     store_proof_selector: str = 'header, [data-testid="store-location"], [aria-label*="Pickup at"]'
+
+def require_source_context_config(store: Store) -> None:
+    """Production browser route cannot start using a configured label as proof."""
+    import re
+    if not re.fullmatch(r"[0-9]{2,5}/[0-9]{3,8}", store.source_store_ref or ""):
+        raise ValueError("real source division/store reference must be configured from authoritative evidence")
+    if store.fulfillment_mode not in ("PICKUP", "IN_STORE", "DELIVERY"):
+        raise ValueError("real product-pricing fulfillment mode must be configured")
+    if (not store.price_response_paths
+        or any(not p.startswith("/") or "?" in p or ".." in p for p in store.price_response_paths)):
+        raise ValueError("approved first-party price response path(s) require live source qualification")
+
 
 def load_categories(path: str) -> list[Category]:
     with Path(path).open("r", newline="", encoding="utf-8-sig") as f:

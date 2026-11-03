@@ -1,8 +1,39 @@
 # Mariano's Azure catalog collector
 
-**v0.5.0 engineering qualification build — cross-platform offline-tested; NOT yet retailer-qualified or Azure-deployed.**
+**v0.5.1 client-review amendment build — cross-platform offline-tested; NOT retailer-qualified or Azure-deployed.**
 
 This is runnable source code with a Playwright browser collector, category discovery from the client's *entire* 28-category CSV, location guardrails, exact JSON schema, checkpoints, a two-days-per-week Azure Container Apps Job recipe, Azure Blob immutable exports, and last-known-good publication. It has offline automated tests, including a real Chromium/Playwright DOM integration test. It is **not** a retailer-observed 500-record contest submission or evidence of live retailer or Azure qualification.
+
+## v0.5.1 - client review amendments (2026-11-03)
+
+See [detailed client review amendment and release status](docs/CLIENT_REVIEW_20261103.md).
+Five client findings were addressed in source and synthetic regression tests:
+(1) permanent previous-catalog retention with a SHA-256-checked historical
+lineage sidecar, first/last observation dates, and fresh-vs-carried counts;
+(2) valid partial checkpoints with subcategory and fresh re-observation;
+(3) same-session first-party store-ref/fulfillment/product-price source
+binding plus canonical product-specific detail fields; (4) uncapped detail
+traversal with fail-closed optional safety limits; and (5) identity-bound
+detail patch caching, coupon term aggregation and independent category
+coverage evidence without manufactured duplicate products.
+
+**Acquisition:** direct permission-gated Playwright Chromium, NOT Walmart
+Classic Oxylabs API. The new typed price-source evidence parser is an
+**unqualified integration contract**: the real first-party JSON schema,
+approved response paths, selected store ID and fulfillment must be established
+from an authorized observed source session. Until then the live browser
+stops before collection rather than guessing IDs or accepting prices.
+
+The client's demo location is **1720 N Milwaukee Ave, Vernon Hills, IL
+60061**. Public retailer directory URL:
+https://www.marianos.com/stores/grocery/il/vernon-hills/marianos-vernon-hills/531/00502
+The directory's `531/00502` path is NOT a verified source-pricing
+session ID. `release/store-vernon-hills-directory-candidate.json` records
+its unverified status. No actual Mariano's contest entry number is known.
+
+The scraper is still **NO_GO for live production acceptance** without
+written rights, observed price-source adapter, genuine 500+ records,
+coupon coverage, Azure run, independent client review and walkthrough.
 
 ## v0.5.0 positive-coverage and coupon safeguards (2026-11-02)
 

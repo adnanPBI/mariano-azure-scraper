@@ -5,7 +5,7 @@
 1. Confirm a signed written license/authorization **specifically allows** collection and retention of Mariano's catalogs, prices, offers and coupon terms at the proposed frequency. Kroger Public API registration is not sufficient by itself.
 2. Confirm one real store ID, full address, ZIP and one address phrase that is visibly present in the store-selection indicator; repeat for each store.
 3. Assign an operator with contributor rights on the **existing** Azure resource group, registry, Container Apps environment and storage account, plus `Microsoft.Authorization/roleAssignments/write` if the deployment script creates RBAC assignments.
-4. Verify all 28 categories and subcategories with an authorized observed run. Most top-level `/d/` URLs are marketing/landing pages rather than guaranteed full catalog pagination endpoints. Coupon coverage must be proven through a defensible UPC/product mapping.
+4. Configure source_store_ref, fulfillment_mode and observed, approved first-party price_response_paths for each store. A public directory reference or header is not a price-source proof; live operation requires strict source-returned store/mode/product/price binding. Verify all 28 categories and subcategories with an authorized observed run. Most top-level `/d/` URLs are marketing/landing pages rather than guaranteed full catalog pagination endpoints. Coupon coverage must be proven through a defensible UPC/product mapping.
 5. Confirm legal scope of any authentication, cookies, retailer membership, offers and stored images. Do not use anti-bot evasion, challenge solvers, unsupported private APIs or rotating proxies.
 
 ## Azure resources

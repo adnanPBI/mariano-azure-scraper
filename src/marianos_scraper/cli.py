@@ -66,6 +66,7 @@ def main(argv=None):
     parser.add_argument("--file",help="path for verify-export")
     parser.add_argument("--authorization-file",default="",help="local signed authorization metadata JSON")
     parser.add_argument("--azure-proof-file",default="",help="Azure observed execution evidence JSON")
+    parser.add_argument("--source-coverage-file",default="",help="Actual validation/source-context report JSON tied to the export hash")
     parser.add_argument("--acceptance-file",default="",help="Independent signed real-world acceptance JSON")
     parser.add_argument("--reviewer-public-key",default="",help="Trusted client reviewer Ed25519 public key PEM")
     args=parser.parse_args(argv)
@@ -74,7 +75,7 @@ def main(argv=None):
         if args.command=="release-check":
             from .qualification import release_report
             result=release_report(args.categories,args.settings,args.authorization_file,args.file or "",args.azure_proof_file,
-                                  args.acceptance_file,args.reviewer_public_key)
+                                  args.acceptance_file,args.reviewer_public_key,args.source_coverage_file)
             print(json.dumps(result,indent=2));return 0 if result["status"]=="GO" else 3
         if args.command=="verify-export":
             if not args.file:parser.error("--file required")

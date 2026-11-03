@@ -11,6 +11,7 @@ from zoneinfo import ZoneInfo
 from .browser import BrowserSource,CrawlFailure,CoverageGap
 from .config import Category,Store,Options
 from .schema import FIELDS,APPROX_WEIGHT,RecordError,record,validate,fingerprint
+from .history import consolidate_fresh, retain_forever, HistoryConflict
 
 LOG=logging.getLogger(__name__)
 
@@ -56,11 +57,11 @@ def _check_coverage(items:list[dict], counts:dict, subcats:dict, categories:list
         if n<options.min_per_category:
             raise CoverageGap(f"missing/empty {cat.name}: {n} records; cannot publish")
     if previous:
-        before=previous.get("records",0)
+        before=previous.get("fresh_observed_records",previous.get("records",0))
         if before and len(items)<before*options.prior_yield_ratio:
             raise CoverageGap(f"total unusually thin: {len(items)} vs previously {before}")
         for cat in categories:
-            old=previous.get("category_counts",{}).get(cat.name,0)
+            old=previous.get("fresh_source_category_counts",previous.get("eligible_category_counts_before_dedup",previous.get("category_counts",{}))).get(cat.name,0)
             if old and counts.get(cat.name,0)<old*options.prior_category_ratio:
                 raise CoverageGap(f"category thin: {cat.name} {counts.get(cat.name)} vs prior {old}")
             prior_urls=set(previous.get("subcategories_by_category",{}).get(cat.name,[]))
@@ -95,6 +96,7 @@ class Pipeline:
             count_per_cat=Counter()
             subcat_map=defaultdict(list)
             completion_evidence=defaultdict(list)
+            authenticated_source_evidence=defaultdict(list)
             proofs=[]
             proof_keys=[]
             try:
@@ -131,6 +133,11 @@ class Pipeline:
                                     raise CoverageGap("completed source checkpoint lacks positive pagination-end evidence")
                                 if checkpoint.get("coverage"):
                                     completion_evidence[cat.name].append(checkpoint["coverage"])
+                                if getattr(source, "requires_source_price_binding", False):
+                                    evidence=checkpoint.get("source_evidence")
+                                    if not isinstance(evidence,dict) or evidence.get("verified") is not True:
+                                        raise CoverageGap("completed checkpoint missing same-session source context")
+                                    authenticated_source_evidence[cat.name].append(evidence)
                                 proofs.append(checkpoint["proof"])
                                 LOG.info("unit_resume",extra={"store":store.id,"category":cat.name,"subcategory":sub_name,"items":len(items)})
                             else:
@@ -141,7 +148,7 @@ class Pipeline:
                                          and checkpoint.get("url")==url else [])
                                 def on_progress(items):
                                     self.storage.assert_healthy()
-                                    self.storage.put_json(ukey,{"complete":False,"store_id":store.id,"category":cat.name,"url":url,"collected_date":datetime.now(ZoneInfo("America/Chicago")).date().isoformat(),"items":items})
+                                    self.storage.put_json(ukey,{"complete":False,"store_id":store.id,"category":cat.name,"subcategory":sub_name,"url":url,"collected_date":datetime.now(ZoneInfo("America/Chicago")).date().isoformat(),"items":items})
                                 outcome=source.crawl_listing(cat,sub_name,url,progress=on_progress,resume_items=partial)
                                 items=outcome.items
                                 proofs.append(outcome.proof)
@@ -152,10 +159,16 @@ class Pipeline:
                                     raise CoverageGap("source unit lacks positive end-of-results evidence")
                                 if outcome.coverage:
                                     completion_evidence[cat.name].append(outcome.coverage)
+                                if getattr(source, "requires_source_price_binding", False):
+                                    evidence=outcome.source_evidence
+                                    if not isinstance(evidence,dict) or evidence.get("verified") is not True:
+                                        raise CoverageGap("new crawl missing same-session source/fulfillment/price evidence")
+                                    authenticated_source_evidence[cat.name].append(evidence)
                                 # Completed unit is atomically committed only after proof and nonzero results.
                                 if not outcome.proof or not items:
                                     raise CoverageGap(f"incomplete unit {url}")
                                 self.storage.put_json(ukey,{"complete":True,"store_id":store.id,"category":cat.name,"subcategory":sub_name,"url":url,"proof":outcome.proof,"observed_count":outcome.observed_count,"coverage":outcome.coverage,
+                                                       "source_evidence":outcome.source_evidence,
                                                        "collected_date":datetime.now(ZoneInfo("America/Chicago")).date().isoformat(),"items":items})
                             for item in items:
                                 data={**item,"zipcode":store.zipcode,"store_name":store.name,"store_location":store.address,"store_logo":(store.logo_url or getattr(source,"logo_url",""))}
@@ -173,31 +186,72 @@ class Pipeline:
                         proof_keys.append(key)
                 if not proofs or any(store.verification_text.casefold() not in s.casefold() for s in proofs):
                     raise CoverageGap("one or more unit checkpoints failed selected-store proof")
-                unique=OrderedDict()
-                duplicate_count=0
-                for p in combined:
-                    key=fingerprint(p)
-                    if key in unique:
-                        duplicate_count+=1
-                        # Keep richer, unaltered observed values; category assignment follows first appearance.
-                        old=unique[key]
-                        if sum(bool(v) for v in p.values())>sum(bool(v) for v in old.values()):
-                            new=dict(p)
-                            new["category"]=old["category"]
-                            new["sub_category"]=old["sub_category"]
-                            unique[key]=record(new,old["crawl_date"])
-                    else:unique[key]=p
-                items=list(unique.values())
-                exported_counts=Counter(p["category"] for p in items)
-                # Global deduplication can suppress a category completely. Never
-                # claim that every category is represented in the published export.
-                missing_exported=[cat.name for cat in categories if not exported_counts[cat.name]]
-                if missing_exported:
-                    raise CoverageGap(f"categories absent after global deduplication: {missing_exported}")
-                _check_coverage(items,exported_counts,subcat_map,categories,options,previous,store)
+                # Source coverage is checked BEFORE joining historical records.
+                # Retaining old products must never camouflage a blocked or thin source.
+                fresh,dedup_proof=consolidate_fresh(combined)
+                fresh_primary=Counter(p["category"] for p in fresh)
+                for cat in categories:
+                    exclusive=sum(
+                        len(names)==1 and cat.name in names
+                        for names in dedup_proof["source_categories_by_product"].values()
+                    )
+                    proofs_for_category=completion_evidence.get(cat.name,[])
+                    independent_overlap=bool(
+                        proofs_for_category and all(
+                            p.get("passed") is True for p in proofs_for_category
+                        )
+                    )
+                    if not exclusive and not independent_overlap:
+                        raise CoverageGap(
+                            f"category {cat.name} absent after global deduplication "
+                            "as an independently attributable product; "
+                            "source overlap lacks positive completion proof"
+                        )
+                    if fresh_primary.get(cat.name,0):
+                        continue
+                    coupon_overlap_only=(cat.name=="Coupons"
+                        and count_per_cat[cat.name]>0 and bool(proofs_for_category)
+                        and all(p.get("passed") is True
+                                and p.get("listing_kind")=="coupons"
+                                and p.get("resolved_identities",0)>0
+                                for p in proofs_for_category))
+                    if not coupon_overlap_only:
+                        raise CoverageGap(
+                            f"category {cat.name} absent after global deduplication; "
+                            "no independent verified overlap/UPC evidence"
+                        )
+                _check_coverage(fresh,dict(count_per_cat),subcat_map,categories,options,previous,store)
                 self.storage.assert_healthy()
-                report=_summarize(items,dict(exported_counts),dict(subcat_map),duplicate_count,previous,store,slot,started)
+                observation_date=datetime.now(ZoneInfo("America/Chicago")).date().isoformat()
+                items,history_records,retention=retain_forever(
+                    self.storage,previous,store,fresh,observation_date
+                )
+                exported_counts=Counter(p["category"] for p in items)
+                report=_summarize(
+                    items,dict(exported_counts),dict(subcat_map),
+                    dedup_proof["fresh_duplicates_consolidated"],
+                    previous,store,slot,started
+                )
+                report.update(retention)
                 report["eligible_category_counts_before_dedup"]=dict(count_per_cat)
+                report["fresh_source_category_counts"]=dict(count_per_cat)
+                report["fresh_primary_category_counts"]=dict(fresh_primary)
+                report["fresh_source_unique_products_by_category"]=dedup_proof[
+                    "source_category_unique_products"
+                ]
+                report["category_coverage_evidence"]={
+                    cat.name:{
+                        "fresh_source_count":count_per_cat[cat.name],
+                        "unique_source_products":dedup_proof[
+                            "source_category_unique_products"
+                        ].get(cat.name,0),
+                        "export_primary_count":exported_counts.get(cat.name,0),
+                        "overlap_only":bool(count_per_cat[cat.name] and not fresh_primary[cat.name]),
+                        "verified_units":len(completion_evidence.get(cat.name,[])),
+                        "unit_completion_proofs":completion_evidence.get(cat.name,[]),
+                        "source_price_proofs":authenticated_source_evidence.get(cat.name,[]),
+                    } for cat in categories
+                }
                 report["positive_listing_evidence_by_category"]=dict(completion_evidence)
                 report["positive_completion_unit_count"]=sum(len(v) for v in completion_evidence.values())
                 data=json.dumps(items,ensure_ascii=False,separators=(",", ":")).encode("utf-8")
@@ -205,9 +259,15 @@ class Pipeline:
                 report["sha256"]=digest
                 report["dataset_key"]=f"exports/{store.id}/{slot}/catalog-{digest[:16]}.json"
                 report["report_key"]=f"exports/{store.id}/{slot}/validation-{digest[:16]}.json"
+                report["history_key"]=f"exports/{store.id}/{slot}/history-{digest[:16]}.json"
                 report["location_proof_samples"]=list(dict.fromkeys(proofs))[:8]
                 report["location_proof_images"]=proof_keys
                 self.storage.put_bytes(report["dataset_key"],data)
+                self.storage.put_json(report["history_key"],{
+                    "dataset_sha256":digest,"store_id":store.id,
+                    "record_count":len(items),"records":history_records,
+                    "retention_policy":"no_deletions_permanent_carry_forward"
+                })
                 self.storage.put_json(report["report_key"],report)
                 # LAST action in success path. A failed run can never alter this pointer.
                 self.storage.assert_healthy()

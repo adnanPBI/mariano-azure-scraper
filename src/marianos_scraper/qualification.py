@@ -8,6 +8,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 from .config import load_categories,load_settings
 from .schema import FIELDS,validate
+from .coverage_audit import audit_source_coverage
 
 REQUIRED_AUTH_SCOPE = ('retailer', 'grantor', 'agreement_id', 'effective_date', 'expiry_date',
                        'authorized_access_method', 'store_ids', 'authorized_categories',
@@ -74,7 +75,7 @@ def authorization_evidence(path: str, stores: list, categories: list) -> dict:
         return {'passed':False,'reason':str(exc)}
 
 
-def audit_export(path:str, categories:list) -> dict:
+def audit_export(path:str, categories:list, source_coverage_path:str="") -> dict:
     """Schema and physical coverage audit; claims are restricted to genuine output evidence."""
     from collections import Counter
     try:
@@ -83,6 +84,15 @@ def audit_export(path:str, categories:list) -> dict:
         for p in items:validate(p)
         raw=Counter(x['category'] for x in items)
         missing=sorted({c.name for c in categories}-set(raw))
+        if missing and source_coverage_path:
+            review=audit_source_coverage(path,source_coverage_path,categories)
+            if review.get("passed"):
+                report=json.loads(Path(source_coverage_path).read_text(encoding="utf-8"))
+                evidence=report.get("category_coverage_evidence",{})
+                missing=[cat for cat in missing if not (
+                    evidence.get(cat,{}).get("overlap_only") is True
+                    and evidence.get(cat,{}).get("fresh_source_count",0)>0
+                )]
         duplicates=len(items)-len({(r['zipcode'],r['store_location'],r['upc'] or r['url'].split('?',1)[0]) for r in items})
         coupons=[x for x in items if x['digital_deals_description']]
         volumes=[x for x in items if x['volume_deals_description']]
@@ -164,7 +174,7 @@ def observed_acceptance_evidence(path: str,public_key_path: str,export_path: str
         return {'passed':False,'reason':type(exc).__name__+': '+str(exc)}
 
 
-def release_report(categories_path:str, settings_path:str, authorization_path:str='', export_path:str='', azure_proof_path:str='', acceptance_path:str='', reviewer_public_key_path:str='') -> dict:
+def release_report(categories_path:str, settings_path:str, authorization_path:str='', export_path:str='', azure_proof_path:str='', acceptance_path:str='', reviewer_public_key_path:str='', source_coverage_path:str='') -> dict:
     result={'status':'NO_GO','checks':{}}
     try:
         cats=load_categories(categories_path)
@@ -180,7 +190,8 @@ def release_report(categories_path:str, settings_path:str, authorization_path:st
         result['checks']['stores']={'passed':False,'reason':str(exc)}
         stores=[]
     result['checks']['authorization']=authorization_evidence(authorization_path,stores,cats)
-    result['checks']['live_export']=audit_export(export_path,cats) if export_path else {'status':'not_run','reason':'No actual retailer export supplied'}
+    result['checks']['source_coverage']=audit_source_coverage(export_path,source_coverage_path,cats)
+    result['checks']['live_export']=audit_export(export_path,cats,source_coverage_path) if export_path else {'status':'not_run','reason':'No actual retailer export supplied'}
     if azure_proof_path and Path(azure_proof_path).is_file():
         try:
             proof=json.loads(Path(azure_proof_path).read_text(encoding='utf-8'))
@@ -202,6 +213,7 @@ def release_report(categories_path:str, settings_path:str, authorization_path:st
     if (result['checks']['manifest'].get('passed') and result['checks']['stores'].get('passed')
             and result['checks']['authorization'].get('passed')
             and result['checks']['live_export'].get('status')=='preliminary_pass'
+            and result['checks']['source_coverage'].get('passed')
             and result['checks']['azure'].get('passed')
             and result['checks']['observed_acceptance'].get('passed')):
         result['status']='GO'

@@ -58,7 +58,12 @@ def scan_coupon_cards(html: str) -> CouponScan:
             continue
         identity_seen.add(label)
         identities.append(label)
-        terms = " ".join(node.stripped_strings).strip()
+        # Product anchors identify eligibility; they are not the offer text.
+        from bs4 import BeautifulSoup as _Soup
+        text_root=_Soup(str(node),"html.parser")
+        for product_link in text_root.select('a[href*="/p/"]'):
+            product_link.decompose()
+        terms = " ".join(text_root.stripped_strings).strip()
         products = []
         for a in node.select('a[href*="/p/"]'):
             href = a.get("href", "")

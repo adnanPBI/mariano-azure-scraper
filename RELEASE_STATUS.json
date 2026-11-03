@@ -1,11 +1,11 @@
 ﻿{
     "project":  "Mariano\u0027s Azure catalog collector",
-    "version":  "0.5.0",
-    "qualification_status":  "NO_GO_AUTHORIZATION_STORES_SOURCE_AZURE_AND_WITNESSED_ACCEPTANCE",
+    "version":  "0.5.1",
+    "qualification_status":  "NO_GO_AUTHORIZATION_SOURCE_TRACE_AND_AZURE_UNAVAILABLE",
     "verified_local":  {
-                           "tests_passed":  68,
+                           "tests_passed":  82,
                            "tests_failed":  0,
-                           "test_kind":  "68 offline RND Windows Python 3.12 tests including source-count, end-of-results, coupon product links, depth/pagination safety, real Chromium selector and recovery fault injection",
+                           "test_kind":  "82 offline Windows Python 3.12 tests, real intercept-only Chromium and historical/coupon/source-context simulations",
                            "configured_categories_from_client_csv":  28,
                            "ordered_json_fields":  22,
                            "permission_guard":  "tested, refuses live operation without explicit authorization settings",
@@ -29,14 +29,24 @@
     "azure_deployment_performed":  false,
     "client_data_set_fabricated":  false,
     "source_licensing":  "Third party site and data rights must be confirmed separately before production use",
-    "last_review_date":  "2026-11-02",
-    "test_count":  68,
-    "test_result":  "68 offline tests passed on RND Windows 2026-11-02",
+    "last_review_date":  "2026-11-03",
+    "test_count":  82,
+    "test_result":  "82 offline RND Windows regression tests; all non-retailer fixtures",
     "production_status":  "NO_GO",
     "azure_deployed":  false,
     "live_retailer_tested":  false,
     "authorized_live_collection":  false,
     "positive_source_completion":  "source total exact match or explicit terminal signal and fully reconciled observed links; real site unverified",
     "coupon_product_link_gate":  "source coupon identity, explicit activation terms, first-party direct product URLs; live source DOM unverified",
-    "accepting_run_hash":  ""
+    "accepting_run_hash":  "",
+    "client_findings_patch":  [
+                                  "previous catalog hash-backed permanent union and lineage",
+                                  "partial checkpoint subcategory and fresh re-observation",
+                                  "source-returned store ID/fulfillment/product price binding contract, live-unqualified",
+                                  "default uncapped identity-bound details with fail-closed positive cap",
+                                  "detail-only cache, multi-coupon offer merge, independent coverage evidence"
+                              ],
+    "verified_public_store_reference":  "Official Mariano\\u0027s Vernon Hills directory path 531/00502 at 1720 N Milwaukee Ave; session ID not yet verified",
+    "source_acquisition_route":  "direct Playwright Chromium; NOT Walmart Oxylabs Classic; source JSON adapter needs authorized qualification",
+    "marianos_contest_entry_number":  "NOT PROVIDED OR VERIFIED"
 }

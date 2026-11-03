@@ -8,6 +8,9 @@ stores:
     verification_text: "REPLACE_WITH_UNIQUE_STREET_ADDRESS_VISIBLE_IN_HEADER"
     logo_url: ""
     canary_urls: []
+    source_store_ref: "REPLACE_WITH_OBSERVED_DIVISION/STORE_NUMBER"
+    fulfillment_mode: "REPLACE_WITH_VERIFIED_PICKUP_IN_STORE_DELIVERY"
+    price_response_paths: [] # MUST be observed/authorized first-party XHR routes
 options:
   max_listing_scrolls: 125
   max_listing_pages: 800 # safety ceiling, not an 80-page hard-coded collection cap
@@ -17,7 +20,7 @@ options:
   prior_yield_ratio: 0.65
   prior_category_ratio: 0.50
   min_subcategory_retention: 0.65
-  max_detail_pages: 50000 # product page enrichment for UPC, PPM and offer terms
+  max_detail_pages: 0 # ZERO means UNCAPPED detail traversal; positive cap rejects thin runs
   timeout_ms: 35000
   delay_seconds: 1.5
   verify_every: 20

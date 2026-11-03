@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "marianos-azure-scraper"
-version = "0.5.0"
+version = "0.5.1"
 description = "Permission-gated Mariano's catalog collection and validated Azure publication"
 requires-python = ">=3.11"
 dependencies = ["playwright==1.56.0", "beautifulsoup4>=4.12,<5", "PyYAML>=6,<7", "azure-storage-blob>=12.22,<13", "azure-identity>=1.19,<2", "cryptography>=42,<52", "tzdata>=2025.2; sys_platform == 'win32'"]

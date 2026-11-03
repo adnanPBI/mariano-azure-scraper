@@ -23,7 +23,7 @@ if [[ ! -f config/stores.yaml ]]; then
 fi
 : "${AZ_JOB_NAME:=marianos-scraper}"
 : "${AZ_IDENTITY_NAME:=marianos-scraper-identity}"
-TAG="${SCRAPER_IMAGE_TAG:-v0.5.0}"
+TAG="${SCRAPER_IMAGE_TAG:-v0.5.1}"
 # All credential/document validation occurs before ANY cloud mutation.
 # Validate original signed evidence before uploading it to a private Blob prefix.
 # The agreement document itself is NOT copied into the Docker image.
@@ -72,6 +72,16 @@ if not (datetime.date.fromisoformat(obj['effective_date'])<=today<=datetime.date
     raise SystemExit('signed authorization outside effective dates')
 obj['signed_agreement_file']='blob:authorization/signed-agreement'
 Path(out).write_text(json.dumps(obj,separators=(',',':')),encoding='utf-8')
+PYCODE
+# An address label and official store-directory URL do NOT qualify price context.
+# Fail BEFORE cloud mutations if source-returned store/fulfillment/path
+# contracts have not been configured from an authorized observation.
+PYTHONPATH=src python - <<'PYCODE'
+from marianos_scraper.config import load_settings, require_source_context_config
+stores, _ = load_settings("config/stores.yaml")
+for store in stores:
+    require_source_context_config(store)
+print("Store source-context config preflight passed (not proof of live compatibility).")
 PYCODE
 az account set --subscription "$AZ_SUBSCRIPTION_ID"
 if az containerapp job show -n "$AZ_JOB_NAME" -g "$AZ_RESOURCE_GROUP" >/dev/null 2>&1; then

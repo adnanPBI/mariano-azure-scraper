@@ -50,7 +50,14 @@ def test_actual_browser_navigation_and_coverage_no_retailer_network():
             p=urlparse(url)
             assert p.hostname=='www.marianos.com'
             visited.append(url)
-            if p.path.startswith('/p/'):html=DETAIL
+            if p.path.startswith('/p/'):
+                title='Kroger® Shells' if 'shells' in p.path else 'Twists Pasta'
+                upc='0001111111111' if 'shells' in p.path else '0003333333333'
+                price='$3.99' if 'shells' in p.path else '$1.50'
+                html=(f'<html><head><link rel="canonical" href="{url}"/></head>'
+                      f'<body>{HEADER}<main><h1>{title}</h1><p>UPC: {upc}</p>'
+                      f'<span data-testid="price">{price}</span>'
+                      f'<span data-testid="ppm">$0.25/oz</span></main></body></html>')
             elif p.path.startswith('/pl/'):
                 html=PAGE2 if 'page=2' in url else PAGE1
             else:html=LANDING

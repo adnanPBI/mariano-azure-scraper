@@ -201,39 +201,146 @@ def _find_ld_products(value: object) -> list[dict]:
             own.extend(_find_ld_products(value[n]))
     return own
 
-def enrich_from_details(item: dict, html: str) -> dict:
+class DetailIdentityError(ValueError):
+    pass
+
+
+def _source_product_path(value: str) -> str:
+    parsed=urlparse(_original_href(value))
+    if parsed.hostname not in ("www.marianos.com","marianos.com"):
+        raise DetailIdentityError("detail source identity is not first-party")
+    if not parsed.path.startswith("/p/"):
+        raise DetailIdentityError("detail page is not a product URL")
+    return parsed.path.rstrip("/")
+
+
+def extract_detail_fields(html: str, expected_url: str) -> dict:
+    """Extract only the requested product's canonical and scoped primary PDP.
+
+    JSON-LD products for recommendations are *never* accepted without an
+    exact URL match. Products and offers outside the primary PDP container
+    cannot supply UPC/size/PPM/price for this product.
+    """
     root=BeautifulSoup(html,"html.parser")
-    if not item.get("product_title"):
-        item["product_title"]=_first_text(root, ('main h1', 'h1', '[data-testid*="product-name"]', '[data-testid*="product-title"]'))
+    expected_path=_source_product_path(expected_url)
+    canonical=root.select_one('link[rel="canonical"][href]')
+    canonical_path=""
+    if canonical:
+        canonical_path=_source_product_path(str(canonical.get("href","")))
+        if canonical_path!=expected_path:
+            raise DetailIdentityError("canonical detail product differs from requested URL")
+    main=root.select_one("main")
+    if main is None:
+        raise DetailIdentityError("no primary product content")
+    # Prefer explicit product-bound DOM regions. If absent, require a
+    # matching canonical and exactly one primary h1 in main. Recommendations
+    # are stripped from the cloned main DOM before field extraction.
+    scope=main.select_one(
+        '[data-testid="product-details"],[data-testid="product-info"],'
+        '[data-testid="pdp-product"],[data-product-url],'
+        'article[data-product-id]'
+    )
+    if scope:
+        scope_url=str(scope.get("data-product-url") or "")
+        scope_id=str(scope.get("data-product-id") or "")
+        if scope_url and _source_product_path(scope_url)!=expected_path:
+            raise DetailIdentityError("product data region identifies an unrelated URL")
+        if scope_id and scope_id!=expected_path.rsplit("/",1)[-1]:
+            raise DetailIdentityError("product region identifier mismatches requested product")
+        if not canonical and not (scope_url or scope_id):
+            raise DetailIdentityError("unbound detail container without canonical proof")
+    elif not canonical_path or len(main.select("h1"))!=1:
+        raise DetailIdentityError("cannot bind primary detail content to requested product")
+    primary=BeautifulSoup(str(scope or main),"html.parser")
+    for unwanted in primary.select(
+        '[data-testid*="recommend"],[data-testid*="related"],'
+        '[class*="recommend"],[class*="Recommend"],[class*="related"],'
+        '[class*="Related"],[aria-label*="Recommended"],'
+        '[aria-label*="Related"],[data-testid*="carousel"],'
+        'section[aria-label*="You May Also"]'
+    ):
+        unwanted.decompose()
+    ld_matches=[]
     for script in root.select('script[type="application/ld+json"]'):
         try:
             products=_find_ld_products(json.loads(script.string or script.get_text()))
         except (json.JSONDecodeError,TypeError,ValueError):
             continue
         for prod in products:
-            for field in ("gtin12","gtin13","gtin14","gtin","upc"):
-                if not item.get("upc") and re.fullmatch(r"\d{8,14}",str(prod.get(field,""))):
-                    item["upc"]=str(prod[field]);break
-    if not item.get("upc"):
-        item["upc"]=_observable_upc(root)
-    if not item.get("weight"):
-        item["weight"]=_observable_weight(root)
-    if not item.get("ppm"):
-        item["ppm"]=_ppm(root)
-    if not item.get("regular_price"):
-        item["regular_price"]=_explicit_price(root,REGULAR_PRICE_SELECTORS) or _explicit_price(root,CURRENT_PRICE_SELECTORS)
-    if not item.get("sale_price"):
-        item["sale_price"]=_explicit_price(root,SALE_PRICE_SELECTORS)
-    if not item.get("image_url"):
-        img = root.select_one('main img[src],main img[data-src]')
-        if img:
-            item["image_url"]=_original_href(str(img.get("src") or img.get("data-src") or ""))
-    offers=item.pop("_offers",[])
-    offers.extend(_observed_offers(root))
-    apply_deals(item, offers)
-    if APPROX_WEIGHT.search(item.get("weight", "")):
-        return {}  # genuine product exclusion
-    return item
+            candidates=[prod.get("url"),prod.get("@id")]
+            identity_ok=False
+            for raw in candidates:
+                if not isinstance(raw,str) or not raw:
+                    continue
+                try:
+                    if _source_product_path(raw)==expected_path:
+                        identity_ok=True
+                except DetailIdentityError:
+                    pass
+            if identity_ok:
+                ld_matches.append(prod)
+    if len(ld_matches)>1:
+        upcs={str(p.get("gtin13") or p.get("gtin12") or p.get("upc") or "")
+              for p in ld_matches}
+        if len(upcs)>1:
+            raise DetailIdentityError("contradictory canonical Product JSON-LD identities")
+    upc=_observable_upc(primary)
+    for product in ld_matches:
+        for key in ("gtin12","gtin13","gtin14","gtin","upc"):
+            val=str(product.get(key,""))
+            if re.fullmatch(r"\d{8,14}",val):
+                if upc and upc!=val:
+                    raise DetailIdentityError("canonical Product JSON-LD UPC disagrees with primary DOM")
+                upc=val
+                break
+    img=primary.select_one("img[src],img[data-src]")
+    title=_first_text(primary,('h1','[data-testid*="product-name"]','[data-testid*="product-title"]'))
+    if not title:
+        raise DetailIdentityError("primary detail product name missing")
+    patch={
+        "product_title":title,
+        "weight":_observable_weight(primary),
+        "regular_price":_explicit_price(primary,REGULAR_PRICE_SELECTORS)
+            or _explicit_price(primary,CURRENT_PRICE_SELECTORS),
+        "sale_price":_explicit_price(primary,SALE_PRICE_SELECTORS),
+        "upc":upc,
+        "ppm":_ppm(primary),
+        "image_url":_original_href(str(img.get("src") or img.get("data-src") or "")) if img else "",
+        "_offers":_observed_offers(primary),
+        "_detail_bound_path":expected_path,
+    }
+    if APPROX_WEIGHT.search(patch["weight"]):
+        return {"_excluded_approx_weight":True,"_detail_bound_path":expected_path}
+    return patch
+
+
+def apply_detail_fields(item: dict, patch: dict) -> dict:
+    if patch.get("_excluded_approx_weight"):
+        return {}
+    if _source_product_path(item.get("url",""))!=patch.get("_detail_bound_path"):
+        raise DetailIdentityError("cached detail belongs to another product")
+    result=dict(item)
+    # Fresh, correctly bound detail values replace stale partial-card fields.
+    # Only missing detail fields retain values observed in this fresh listing.
+    for field in ("product_title","weight","regular_price","sale_price","upc","ppm","image_url"):
+        val=patch.get(field,"")
+        if val:
+            if field=="upc" and result.get("upc") and result["upc"]!=val:
+                raise DetailIdentityError("listing UPC and scoped detail UPC disagree")
+            result[field]=val
+    offers=list(result.pop("_offers",[]))
+    for offer in patch.get("_offers",[]):
+        if offer not in offers:
+            offers.append(offer)
+    apply_deals(result, offers)
+    if APPROX_WEIGHT.search(result.get("weight","")):
+        return {}
+    return result
+
+
+def enrich_from_details(item: dict, html: str) -> dict:
+    """Backward-compatible, identity-strict facade for detail enrichment."""
+    return apply_detail_fields(item,extract_detail_fields(html,item["url"]))
 
 def finalize_card(item: dict) -> dict:
     out=dict(item)

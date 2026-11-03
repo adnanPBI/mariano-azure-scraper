@@ -8,7 +8,8 @@
 
 ```
 marianos-scrape release-check --settings /secure/stores.yaml --authorization-file /secure/auth.json \
-  --file /secure/observed-real-export.json --azure-proof-file /secure/azure-job-proof.json \
+  --file /secure/observed-real-export.json --source-coverage-file /secure/observed-validation.json \
+  --azure-proof-file /secure/azure-job-proof.json \
   --acceptance-file /secure/observed-acceptance.json --reviewer-public-key /secure/reviewer_ed25519_public.pem
 ```
 

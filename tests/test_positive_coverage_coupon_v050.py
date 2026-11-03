@@ -150,7 +150,11 @@ def test_positive_coupon_browser_end_to_end_in_intercepted_chromium():
             else:
                 source.page.set_content(listing)
                 return
-            source.page.set_content("<html><body><header>Pickup at Mariano's 123 Example St</header><main>"+page+"</main></body></html>")
+            source.page.set_content(
+                '<html><head><link rel="canonical" href="'+url+'"/></head>'
+                "<body><header>Pickup at Mariano's 123 Example St</header><main>"
+                +page+"</main></body></html>"
+            )
         source._navigate=fake_navigate
         source._check_block=lambda:None
         units=source.discover_units(category)
