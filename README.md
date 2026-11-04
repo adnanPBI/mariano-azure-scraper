@@ -4,6 +4,17 @@
 
 This is runnable source code with a Playwright browser collector, category discovery from the client's *entire* 28-category CSV, location guardrails, exact JSON schema, checkpoints, a two-days-per-week Azure Container Apps Job recipe, Azure Blob immutable exports, and last-known-good publication. It has offline automated tests, including a real Chromium/Playwright DOM integration test. It is **not** a retailer-observed 500-record contest submission or evidence of live retailer or Azure qualification.
 
+## November 4 independent evidence-boundary checkpoint
+
+See [the GitHub source/CI audit and separate production evidence tracks](docs/CLIENT_EVIDENCE_BOUNDARIES_20261104.md)
+and the [machine-readable present-state register](release/evidence-register-20261104.json).
+Three GitHub jobs were rechecked directly: 82 offline tests and source/wheel
+builds passed on each runner. This does **not** establish observed Vernon
+Hills/PICKUP source prices, full category/coupon collection, live recovery,
+Azure execution, contest entry or award eligibility. The `release-check`
+output now includes separate `evidence_domains`. Production status remains
+**NO_GO** while client-side authorization/access is pending.
+
 ## v0.5.1 - client review amendments (2026-11-03)
 
 See [detailed client review amendment and release status](docs/CLIENT_REVIEW_20261103.md).

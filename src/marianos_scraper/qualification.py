@@ -9,6 +9,7 @@ from urllib.parse import urlparse
 from .config import load_categories,load_settings
 from .schema import FIELDS,validate
 from .coverage_audit import audit_source_coverage
+from .evidence_domains import describe_release_evidence
 
 REQUIRED_AUTH_SCOPE = ('retailer', 'grantor', 'agreement_id', 'effective_date', 'expiry_date',
                        'authorized_access_method', 'store_ids', 'authorized_categories',
@@ -181,6 +182,7 @@ def release_report(categories_path:str, settings_path:str, authorization_path:st
         result['checks']['manifest']={'passed':len(cats)==28, 'count':len(cats), 'names':[x.name for x in cats]}
     except Exception as exc:
         result['checks']['manifest']={'passed':False,'reason':str(exc)}
+        result['evidence_domains']=describe_release_evidence(result['checks'])
         return result
     try:
         stores,opts=load_settings(settings_path)
@@ -218,4 +220,5 @@ def release_report(categories_path:str, settings_path:str, authorization_path:st
             and result['checks']['observed_acceptance'].get('passed')):
         result['status']='GO'
         result['caution']='GO is based on independent signed operator evidence; verify its claims with the retailer and Azure control plane.'
+    result['evidence_domains']=describe_release_evidence(result['checks'])
     return result
