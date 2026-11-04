@@ -84,3 +84,17 @@ def test_checkpoint_register_explicitly_blocks_all_unobserved_gates():
     assert len(ci["jobs"]) == 3
     assert all(j["tests_passed"] == 82 and j["package_build"] == "success"
                for j in ci["jobs"])
+    # This is a separate, later GitHub job-log inspection, not a rewrite
+    # of the historical November 3 CI record or proof of live acceptance.
+    latest = payload["latest_independently_rechecked_ci"]
+    assert latest["source_commit_sha"] == "b3ae7c7f59e415d28e8bc21c173e895a2af8e6d4"
+    assert latest["workflow_run_id"] == 41763745403
+    assert latest["conclusion"] == "success"
+    assert len(latest["jobs"]) == 3
+    assert all(j["tests_passed"] == 86 and j["python_build"] == "success"
+               for j in latest["jobs"])
+    assert latest["qualification"] == "OFFLINE_ENGINEERING_ONLY"
+    assert latest["genuine_retailer_records_observed"] == 0
+    assert latest["azure_job_observed"] is False
+    assert latest["contest_entry_verified"] is False
+    assert payload["release_status"] == "NO_GO"

@@ -8,8 +8,11 @@ This is runnable source code with a Playwright browser collector, category disco
 
 See [the GitHub source/CI audit and separate production evidence tracks](docs/CLIENT_EVIDENCE_BOUNDARIES_20261104.md)
 and the [machine-readable present-state register](release/evidence-register-20261104.json).
-Three GitHub jobs were rechecked directly: 82 offline tests and source/wheel
-builds passed on each runner. This does **not** establish observed Vernon
+Three GitHub jobs were rechecked directly for the original v0.5.1 source:
+82 offline tests and source/wheel builds passed on each runner. A subsequent
+GitHub run for the added evidence-boundary tests completed with **86 passed
+and successful source/wheel builds in each of the same three environments**;
+see the separate SHA/run references in the evidence register. This does **not** establish observed Vernon
 Hills/PICKUP source prices, full category/coupon collection, live recovery,
 Azure execution, contest entry or award eligibility. The `release-check`
 output now includes separate `evidence_domains`. Production status remains

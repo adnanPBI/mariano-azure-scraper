@@ -1,90 +1,135 @@
 {
-  "schema_version": "2026-11-04.1",
-  "as_of_date": "2026-11-04",
-  "release_status": "NO_GO",
-  "independently_rechecked_ci": {
-    "source_commit_sha": "313bf6995aa57fe07946383d2910dbade47aa75a",
-    "source_scope": "v0.5.1 code, Nov 3 checkpoint document only",
-    "workflow_run_id": 41664946302,
-    "workflow_url": "https://github.com/adnanPBI/mariano-azure-scraper/actions/runs/41664946302",
-    "result": "success",
-    "jobs": [
-      {
-        "job_id": 126017644125,
-        "environment": "ubuntu-24.04 Python 3.11",
-        "tests_passed": 82,
-        "package_build": "success"
-      },
-      {
-        "job_id": 126017644505,
-        "environment": "ubuntu-24.04 Python 3.12",
-        "tests_passed": 82,
-        "package_build": "success"
-      },
-      {
-        "job_id": 126017644554,
-        "environment": "windows-latest Python 3.12",
-        "tests_passed": 82,
-        "package_build": "success"
-      }
-    ],
-    "review_scope": "Direct GitHub Actions job-log inspection; tests are localhost/synthetic only. Not an independent client rerun."
-  },
-  "technical_target": {
-    "retailer": "Mariano's",
-    "address": "1720 N Milwaukee Ave, Vernon Hills, IL 60061",
-    "zip": "60061",
-    "fulfillment_intended": "PICKUP",
-    "public_directory_reference": "531/00502",
-    "public_directory_reference_role": "Public locator only; not proof of shopping session",
-    "source_returned_store_id": null,
-    "same_session_price_verified": false,
-    "verified_product_price_responses": 0
-  },
-  "acquisition": {
-    "route": "direct_playwright",
-    "observed_live_source_adapter": false,
-    "walmart_oxylabs_entitlement_applies": false,
-    "production_collect_permission_verified": false
-  },
-  "owner_dependent_evidence": {
-    "collection_authorization": {
-      "status": "NOT_VERIFIED",
-      "evidence_ids": [],
-      "required": "Signed right to collect and retain Mariano's product/coupon data"
-    },
-    "source_bound_prices": {
-      "status": "NOT_VERIFIED",
-      "evidence_ids": [],
-      "required": "Authorized same-session PICKUP response with source-returned store ID, UPC, actual price and response digest"
-    },
-    "complete_catalog_coupons": {
-      "status": "NOT_VERIFIED",
-      "evidence_ids": [],
-      "required": "28-category and all applicable subcategory/coupon navigation, positive termination, >=500 genuine fresh distinct products, PPM/offer spot checks"
-    },
-    "actual_recovery": {
-      "status": "NOT_VERIFIED",
-      "evidence_ids": [],
-      "required": "Observed live partial retry, fresh price update, missing/unpriced carry-forward, repeat run, last-good readbacks"
-    },
-    "azure_job": {
-      "status": "NOT_VERIFIED",
-      "evidence_ids": [],
-      "required": "Approved Azure subscription/budget, actual job execution ID/logs/runtime/cost/Blob hash/schedule verification"
-    },
-    "independent_client_signoff": {
-      "status": "NOT_VERIFIED",
-      "evidence_ids": [],
-      "required": "Independent witnessed source audit and accepted walkthrough/signoff"
-    }
-  },
-  "contest": {
-    "entry_number": null,
-    "submission_url": null,
-    "eligibility_verified": false,
-    "award_commitment": false,
-    "status": "SEPARATE_UNVERIFIED"
-  },
-  "notes": "No synthetic fixtures, author-created evidence JSON, public store directory IDs, CI success, or script existence may be presented as retailer-live or Azure acceptance."
+    "schema_version":  "2026-11-04.1",
+    "as_of_date":  "2026-11-04",
+    "release_status":  "NO_GO",
+    "independently_rechecked_ci":  {
+                                       "source_commit_sha":  "313bf6995aa57fe07946383d2910dbade47aa75a",
+                                       "source_scope":  "v0.5.1 code, Nov 3 checkpoint document only",
+                                       "workflow_run_id":  41664946302,
+                                       "workflow_url":  "https://github.com/adnanPBI/mariano-azure-scraper/actions/runs/41664946302",
+                                       "result":  "success",
+                                       "jobs":  [
+                                                    {
+                                                        "job_id":  126017644125,
+                                                        "environment":  "ubuntu-24.04 Python 3.11",
+                                                        "tests_passed":  82,
+                                                        "package_build":  "success"
+                                                    },
+                                                    {
+                                                        "job_id":  126017644505,
+                                                        "environment":  "ubuntu-24.04 Python 3.12",
+                                                        "tests_passed":  82,
+                                                        "package_build":  "success"
+                                                    },
+                                                    {
+                                                        "job_id":  126017644554,
+                                                        "environment":  "windows-latest Python 3.12",
+                                                        "tests_passed":  82,
+                                                        "package_build":  "success"
+                                                    }
+                                                ],
+                                       "review_scope":  "Direct GitHub Actions job-log inspection; tests are localhost/synthetic only. Not an independent client rerun."
+                                   },
+    "technical_target":  {
+                             "retailer":  "Mariano\u0027s",
+                             "address":  "1720 N Milwaukee Ave, Vernon Hills, IL 60061",
+                             "zip":  "60061",
+                             "fulfillment_intended":  "PICKUP",
+                             "public_directory_reference":  "531/00502",
+                             "public_directory_reference_role":  "Public locator only; not proof of shopping session",
+                             "source_returned_store_id":  null,
+                             "same_session_price_verified":  false,
+                             "verified_product_price_responses":  0
+                         },
+    "acquisition":  {
+                        "route":  "direct_playwright",
+                        "observed_live_source_adapter":  false,
+                        "walmart_oxylabs_entitlement_applies":  false,
+                        "production_collect_permission_verified":  false
+                    },
+    "owner_dependent_evidence":  {
+                                     "collection_authorization":  {
+                                                                      "status":  "NOT_VERIFIED",
+                                                                      "evidence_ids":  [
+
+                                                                                       ],
+                                                                      "required":  "Signed right to collect and retain Mariano\u0027s product/coupon data"
+                                                                  },
+                                     "source_bound_prices":  {
+                                                                 "status":  "NOT_VERIFIED",
+                                                                 "evidence_ids":  [
+
+                                                                                  ],
+                                                                 "required":  "Authorized same-session PICKUP response with source-returned store ID, UPC, actual price and response digest"
+                                                             },
+                                     "complete_catalog_coupons":  {
+                                                                      "status":  "NOT_VERIFIED",
+                                                                      "evidence_ids":  [
+
+                                                                                       ],
+                                                                      "required":  "28-category and all applicable subcategory/coupon navigation, positive termination, \u003e=500 genuine fresh distinct products, PPM/offer spot checks"
+                                                                  },
+                                     "actual_recovery":  {
+                                                             "status":  "NOT_VERIFIED",
+                                                             "evidence_ids":  [
+
+                                                                              ],
+                                                             "required":  "Observed live partial retry, fresh price update, missing/unpriced carry-forward, repeat run, last-good readbacks"
+                                                         },
+                                     "azure_job":  {
+                                                       "status":  "NOT_VERIFIED",
+                                                       "evidence_ids":  [
+
+                                                                        ],
+                                                       "required":  "Approved Azure subscription/budget, actual job execution ID/logs/runtime/cost/Blob hash/schedule verification"
+                                                   },
+                                     "independent_client_signoff":  {
+                                                                        "status":  "NOT_VERIFIED",
+                                                                        "evidence_ids":  [
+
+                                                                                         ],
+                                                                        "required":  "Independent witnessed source audit and accepted walkthrough/signoff"
+                                                                    }
+                                 },
+    "contest":  {
+                    "entry_number":  null,
+                    "submission_url":  null,
+                    "eligibility_verified":  false,
+                    "award_commitment":  false,
+                    "status":  "SEPARATE_UNVERIFIED"
+                },
+    "notes":  "No synthetic fixtures, author-created evidence JSON, public store directory IDs, CI success, or script existence may be presented as retailer-live or Azure acceptance.",
+    "latest_independently_rechecked_ci":  {
+                                              "source_commit_sha":  "b3ae7c7f59e415d28e8bc21c173e895a2af8e6d4",
+                                              "source_scope":  "v0.5.1 plus evidence-separation source/test changes",
+                                              "workflow_run_id":  41763745403,
+                                              "workflow_url":  "https://github.com/adnanPBI/mariano-azure-scraper/actions/runs/41763745403",
+                                              "conclusion":  "success",
+                                              "observed_on":  "2026-11-04",
+                                              "evidence_method":  "Direct independent GitHub workflow job-log and artifact inspection; no retailer/network or Azure production run",
+                                              "jobs":  [
+                                                           {
+                                                               "environment":  "ubuntu-24.04 Python 3.11",
+                                                               "python_build":  "success",
+                                                               "id":  126357166471,
+                                                               "tests_passed":  86
+                                                           },
+                                                           {
+                                                               "environment":  "ubuntu-24.04 Python 3.12",
+                                                               "python_build":  "success",
+                                                               "id":  126357166181,
+                                                               "tests_passed":  86
+                                                           },
+                                                           {
+                                                               "environment":  "windows-latest Python 3.12",
+                                                               "python_build":  "success",
+                                                               "id":  126357166357,
+                                                               "tests_passed":  86
+                                                           }
+                                                       ],
+                                              "qualification":  "OFFLINE_ENGINEERING_ONLY",
+                                              "genuine_retailer_records_observed":  0,
+                                              "azure_job_observed":  false,
+                                              "contest_entry_verified":  false
+                                          }
 }

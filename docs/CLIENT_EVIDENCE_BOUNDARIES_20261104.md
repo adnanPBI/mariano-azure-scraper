@@ -29,6 +29,26 @@ the client's independent acceptance process. The code is still v0.5.1.
 - GitHub tests exercise locally intercepted Chromium/fixtures and file
   state, not retail network products or actual Azure resources.
 
+## Latest November 4 CI recheck
+
+I re-inspected current source checkpoint
+[`b3ae7c7f59e415d28e8bc21c173e895a2af8e6d4`](https://github.com/adnanPBI/mariano-azure-scraper/commit/b3ae7c7f59e415d28e8bc21c173e895a2af8e6d4)
+and its matching
+[GitHub Actions run 41763745403](https://github.com/adnanPBI/mariano-azure-scraper/actions/runs/41763745403).
+The *actual job logs* show **86 passing offline tests** and successful
+v0.5.1 wheel + source builds on Ubuntu 24.04/Python 3.11
+(job `126357166471`), Ubuntu 24.04/Python 3.12
+(job `126357166181`) and Windows/Python 3.12
+(job `126357166357`). The earlier November 3 checkpoint's **82**
+tests per runner remain an accurate historical result; four later
+evidence-boundary tests explain the difference.
+
+The new `latest_independently_rechecked_ci` field in
+[`release/evidence-register-20261104.json`](../release/evidence-register-20261104.json)
+retains the exact source SHA, run ID and three job IDs separately from
+the historical CI entry. Neither run constitutes retailer- or Azure-live
+evidence, and no completed contest entry number is known.
+
 ## Strictly separate verification tracks
 
 | Domain | Current status | Evidence needed for the next decision |
