@@ -93,6 +93,15 @@ class SourceResponseLedger:
             if not isinstance(product, dict):
                 raise SourceContextError("typed product element must be an object")
             path = canonical_product_url(str(product.get("url", "")))
+            # Each source price has an independent semantic role. Missing or
+            # empty fields stay empty; an invalid non-empty value must not be
+            # silently interpreted as an absent role or inferred from its peer.
+            for field in ("regular_price", "sale_price"):
+                raw_value = product.get(field, "")
+                if raw_value is not None and str(raw_value).strip() and not price_text(raw_value):
+                    raise SourceContextError(
+                        f"invalid source {field}: cannot bind price role"
+                    )
             regular = price_text(product.get("regular_price", ""))
             sale = price_text(product.get("sale_price", ""))
             unpriced = product.get("unpriced") is True
@@ -126,11 +135,30 @@ class SourceResponseLedger:
             raise SourceContextError("no same-session first-party source-price response for product "+path)
         if price.store_ref != self.store.source_store_ref or price.fulfillment != self.store.fulfillment_mode:
             raise SourceContextError("source binding changed store/fulfillment")
-        actual_prices={x for x in (price.regular_price, price.sale_price) if x}
-        extracted_prices={x for x in (item.get("regular_price",""), item.get("sale_price","")) if x}
-        if extracted_prices and not extracted_prices.issubset(actual_prices):
-            raise SourceContextError("displayed product prices disagree with same-session price source")
-        if not extracted_prices and not price.unpriced:
+        # A value-set comparison is unsafe: regular=3.00/sale=5.00 must
+        # NEVER validate against source regular=5.00/sale=3.00. Check
+        # every populated output slot only against the same source slot.
+        # Never repair, swap, or infer values from the other price role.
+        has_output_price = False
+        for field in ("regular_price", "sale_price"):
+            raw_value = item.get(field, "")
+            if raw_value is None or str(raw_value).strip() == "":
+                continue
+            has_output_price = True
+            observed = price_text(raw_value)
+            if not observed:
+                raise SourceContextError(f"invalid displayed {field}: not an explicit price")
+            expected = getattr(price, field)
+            if not expected:
+                raise SourceContextError(
+                    f"displayed {field} has no corresponding source {field} "
+                    "(missing or blank); cannot infer its role"
+                )
+            if observed != expected:
+                raise SourceContextError(
+                    f"displayed product prices disagree with same-session price source: {field}"
+                )
+        if not has_output_price and not price.unpriced:
             raise SourceContextError("unpriced card lacks explicit source unpriced response")
         if item.get("upc") and price.upc and item["upc"]!=price.upc:
             raise SourceContextError("source UPC differs from product detail")
